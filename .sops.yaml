@@ -8,4 +8,5 @@ creation_rules:
       # operator key (~/.config/sops/age/keys.txt on build host)
       # — TODO: add once operator key is generated
       # install key (Yubikey PIV slot 0x9d, unwrapped via yk-unwrap.py)
-      # — TODO: add once yk-setup.py has been run
+      # — wrapped key stored at killy/wrapped-install-key.bin
+      - age1awefdn75tgq3ezwh9zcsjh233q9a792pqn09dn9dwk08gk4603yqqp7gzh

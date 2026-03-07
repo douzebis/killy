@@ -30,6 +30,9 @@ let
       # Shell scripting
       bash
       jq
+
+      # Linting
+      ruff
     ];
   };
 
