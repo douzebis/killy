@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""yk-setup.py — wrap an age private key using the Yubikey PIV slot 0x9d.
+"""yk-setup.py — wrap an age private key using a Yubikey PIV retired slot.
 
 Usage:
-    python3 scripts/yk-setup.py --age-key <path> --out <path>
+    python3 scripts/yk-setup.py --hostname <name> --age-key <path> --out <path> [--force]
 
-Reads the age private key from --age-key, wraps it using the P-256 key in
-PIV slot KEY_MANAGEMENT (0x9d), and writes the ciphertext to --out.
+Scans all PIV retired slots (0x82-0x95) for a certificate with
+CN=<hostname>-install-key. If found, uses that slot's key. If not found,
+picks the first free retired slot, generates a P-256 key with
+PIN_POLICY.NEVER and TOUCH_POLICY.NEVER, and stores a self-signed
+certificate with CN=<hostname>-install-key.
 
-If slot 0x9d has no key, one is generated on-device first (requires the
-default management key).
+Wraps the age private key from --age-key and writes the ciphertext to --out.
+Use --force to regenerate the key even if CN=<hostname>-install-key already
+exists (e.g. after Yubikey compromise).
 
 The wrapped file format:
     ephemeral_pubkey_uncompressed(65) || nonce(12) || ciphertext+tag
@@ -21,6 +25,7 @@ import argparse
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 from cryptography.hazmat.primitives.asymmetric.ec import (
     ECDH,
@@ -31,16 +36,26 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.x509.oid import NameOID
 from ykman.device import list_all_devices
+from ykman.piv import generate_self_signed_certificate
 from yubikit.core.smartcard import SmartCardConnection
-from yubikit.piv import KEY_TYPE, SLOT, PivSession
+from yubikit.piv import KEY_TYPE, PIN_POLICY, SLOT, TOUCH_POLICY, PivSession
 
 
 HKDF_INFO = b"killy-install"
-# Default management key (3DES/AES all-zeros variant shipped on every Yubikey)
 DEFAULT_MGMT_KEY = bytes.fromhex(
     "010203040506070801020304050607080102030405060708"
 )
+
+# Retired slots available for custom use (RETIRED1=0x82 … RETIRED20=0x95)
+RETIRED_SLOTS = [
+    SLOT.RETIRED1, SLOT.RETIRED2, SLOT.RETIRED3, SLOT.RETIRED4,
+    SLOT.RETIRED5, SLOT.RETIRED6, SLOT.RETIRED7, SLOT.RETIRED8,
+    SLOT.RETIRED9, SLOT.RETIRED10, SLOT.RETIRED11, SLOT.RETIRED12,
+    SLOT.RETIRED13, SLOT.RETIRED14, SLOT.RETIRED15, SLOT.RETIRED16,
+    SLOT.RETIRED17, SLOT.RETIRED18, SLOT.RETIRED19, SLOT.RETIRED20,
+]
 
 
 def get_piv_session():
@@ -53,24 +68,92 @@ def get_piv_session():
     return PivSession(conn)
 
 
-def get_or_generate_key(piv):
-    """Return the P-256 public key from slot 0x9d, generating it if absent."""
+def slot_cn(piv, slot):
+    """Return the CN of the certificate in slot, or None if absent."""
     try:
-        piv.get_slot_metadata(SLOT.KEY_MANAGEMENT)
-        # Slot has a key — retrieve public key via certificate if present,
-        # otherwise fall through to generate (should not happen in practice).
-        cert = piv.get_certificate(SLOT.KEY_MANAGEMENT)
-        print("Slot 0x9d already has a key — using it.", file=sys.stderr)
-        return cert.public_key()
+        cert = piv.get_certificate(slot)
+        attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        return attrs[0].value if attrs else None
     except Exception:
-        pass
+        return None
 
-    # Slot is empty — generate a new P-256 key on-device.
-    print("Slot 0x9d is empty — generating P-256 key on-device...", file=sys.stderr)
+
+def find_slot_by_cn(piv, cn):
+    """Return the first retired slot whose certificate CN matches, or None."""
+    for slot in RETIRED_SLOTS:
+        if slot_cn(piv, slot) == cn:
+            return slot
+    return None
+
+
+def find_free_slot(piv):
+    """Return the first retired slot with no key/certificate, or None."""
+    for slot in RETIRED_SLOTS:
+        try:
+            piv.get_slot_metadata(slot)
+            # Slot has a key — occupied
+        except Exception:
+            return slot
+    return None
+
+
+def get_or_create_slot(piv, cn, force):
+    """
+    Find or create a retired slot for the given CN.
+
+    Returns (slot, pubkey). If force=True and the CN already exists,
+    the existing key is replaced.
+    """
+    existing = find_slot_by_cn(piv, cn)
+
+    if existing and not force:
+        print(
+            f"Found CN={cn} in slot {existing.name} (0x{existing.value:02x}) — using it.",
+            file=sys.stderr,
+        )
+        cert = piv.get_certificate(existing)
+        return existing, cert.public_key()
+
+    if existing and force:
+        slot = existing
+        print(
+            f"--force: regenerating key in slot {slot.name} (0x{slot.value:02x}).",
+            file=sys.stderr,
+        )
+    else:
+        slot = find_free_slot(piv)
+        if slot is None:
+            print("ERROR: no free retired slots available (0x82-0x95 all occupied)", file=sys.stderr)
+            sys.exit(1)
+        print(
+            f"No slot with CN={cn} found — using free slot {slot.name} (0x{slot.value:02x}).",
+            file=sys.stderr,
+        )
+
     piv.authenticate(piv.management_key_type, DEFAULT_MGMT_KEY)
-    pub = piv.generate_key(SLOT.KEY_MANAGEMENT, KEY_TYPE.ECCP256)
-    print("Key generated in slot 0x9d.", file=sys.stderr)
-    return pub
+
+    pub = piv.generate_key(
+        slot,
+        KEY_TYPE.ECCP256,
+        pin_policy=PIN_POLICY.NEVER,
+        touch_policy=TOUCH_POLICY.NEVER,
+    )
+    print("P-256 key generated on-device (PIN_POLICY=NEVER, TOUCH_POLICY=NEVER).", file=sys.stderr)
+
+    now = datetime.now(timezone.utc)
+    cert = generate_self_signed_certificate(
+        session=piv,
+        slot=slot,
+        public_key=pub,
+        subject_str=f"CN={cn}",
+        valid_from=now,
+        valid_to=now + timedelta(days=36500),  # 100 years — purely a label
+        hash_algorithm=SHA256,
+    )
+    piv.put_certificate(slot, cert)
+    print(f"Self-signed certificate stored (CN={cn}).", file=sys.stderr)
+
+    return slot, pub
 
 
 def wrap(plaintext, yubikey_pubkey):
@@ -98,30 +181,34 @@ def wrap(plaintext, yubikey_pubkey):
 
 def age_pubkey_from_privkey(age_key_text):
     """Extract the age public key comment line from an age private key file."""
-    # age-keygen output: '# public key: age1...\nAGE-SECRET-KEY-1...\n'
     m = re.search(r"#\s*public key:\s*(age1\S+)", age_key_text)
-    if m:
-        return m.group(1)
-    return None
+    return m.group(1) if m else None
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--hostname", required=True, help="target hostname (e.g. killy)")
     parser.add_argument("--age-key", required=True, help="path to age private key file")
     parser.add_argument("--out", required=True, help="path to write wrapped key file")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="regenerate Yubikey key even if CN=<hostname>-install-key already exists",
+    )
     args = parser.parse_args()
 
+    cn = f"{args.hostname}-install-key"
     age_key_bytes = open(args.age_key, "rb").read()
 
     piv = get_piv_session()
-    yubikey_pub = get_or_generate_key(piv)
+    slot, yubikey_pub = get_or_create_slot(piv, cn, args.force)
 
     blob = wrap(age_key_bytes, yubikey_pub)
 
     with open(args.out, "wb") as f:
         f.write(blob)
     os.chmod(args.out, 0o644)
-    print(f"Wrapped key written to: {args.out}", file=sys.stderr)
+    print(f"Wrapped key written to: {args.out} (slot {slot.name})", file=sys.stderr)
 
     age_pub = age_pubkey_from_privkey(age_key_bytes.decode())
     if age_pub:

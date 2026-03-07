@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""yk-unwrap.py — unwrap an age private key using the Yubikey PIV slot 0x9d.
+"""yk-unwrap.py — unwrap an age private key using a Yubikey PIV retired slot.
 
 Usage:
-    python3 scripts/yk-unwrap.py <wrapped-key-file>
+    python3 scripts/yk-unwrap.py --hostname <name> <wrapped-key-file>
 
-Reads the wrapped key file produced by yk-setup.py, performs ECDH on-device
-using PIV slot KEY_MANAGEMENT (0x9d), and prints the plaintext age private
-key to stdout. Requires PIN entry.
+Scans all PIV retired slots (0x82-0x95) for a certificate with
+CN=<hostname>-install-key, performs ECDH on-device (no PIN required —
+PIN_POLICY=NEVER), and prints the plaintext age private key to stdout.
 
 The wrapped file format:
     ephemeral_pubkey_uncompressed(65) || nonce(12) || ciphertext+tag
 """
 
-import getpass
+import argparse
 import sys
 
 from cryptography.hazmat.backends import default_backend
@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.x509.oid import NameOID
 from ykman.device import list_all_devices
 from yubikit.core.smartcard import SmartCardConnection
 from yubikit.piv import SLOT, PivSession
@@ -31,6 +32,14 @@ from yubikit.piv import SLOT, PivSession
 HKDF_INFO = b"killy-install"
 EPHEMERAL_PUBKEY_LEN = 65  # uncompressed P-256 point: 0x04 || x(32) || y(32)
 NONCE_LEN = 12
+
+RETIRED_SLOTS = [
+    SLOT.RETIRED1, SLOT.RETIRED2, SLOT.RETIRED3, SLOT.RETIRED4,
+    SLOT.RETIRED5, SLOT.RETIRED6, SLOT.RETIRED7, SLOT.RETIRED8,
+    SLOT.RETIRED9, SLOT.RETIRED10, SLOT.RETIRED11, SLOT.RETIRED12,
+    SLOT.RETIRED13, SLOT.RETIRED14, SLOT.RETIRED15, SLOT.RETIRED16,
+    SLOT.RETIRED17, SLOT.RETIRED18, SLOT.RETIRED19, SLOT.RETIRED20,
+]
 
 
 def get_piv_session():
@@ -43,6 +52,19 @@ def get_piv_session():
     return PivSession(conn)
 
 
+def find_slot_by_cn(piv, cn):
+    """Return the first retired slot whose certificate CN matches, or None."""
+    for slot in RETIRED_SLOTS:
+        try:
+            cert = piv.get_certificate(slot)
+            attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            if attrs and attrs[0].value == cn:
+                return slot
+        except Exception:
+            continue
+    return None
+
+
 def load_ephemeral_pubkey(raw_bytes):
     """Parse a 65-byte uncompressed P-256 point into a public key object."""
     x = int.from_bytes(raw_bytes[1:33], "big")
@@ -52,7 +74,7 @@ def load_ephemeral_pubkey(raw_bytes):
     )
 
 
-def unwrap(blob, piv):
+def unwrap(blob, piv, slot):
     """Unwrap the blob using ECDH on the Yubikey + HKDF-SHA256 + AES-256-GCM."""
     if len(blob) < EPHEMERAL_PUBKEY_LEN + NONCE_LEN + 16:
         print("ERROR: wrapped key file is too short", file=sys.stderr)
@@ -64,11 +86,8 @@ def unwrap(blob, piv):
 
     ephemeral_pub = load_ephemeral_pubkey(ephemeral_pub_bytes)
 
-    pin = getpass.getpass("Enter Yubikey PIN: ")
-    piv.verify_pin(pin)
-
-    # ECDH on-device: Yubikey private key × ephemeral public key
-    shared_secret = piv.calculate_secret(SLOT.KEY_MANAGEMENT, ephemeral_pub)
+    # PIN_POLICY=NEVER — no verify_pin() call needed
+    shared_secret = piv.calculate_secret(slot, ephemeral_pub)
 
     aes_key = HKDF(
         algorithm=SHA256(),
@@ -87,19 +106,28 @@ def unwrap(blob, piv):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <wrapped-key-file>", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--hostname", required=True, help="target hostname (e.g. killy)")
+    parser.add_argument("wrapped_key", help="path to wrapped key file")
+    args = parser.parse_args()
 
-    wrapped_path = sys.argv[1]
+    cn = f"{args.hostname}-install-key"
+
     try:
-        blob = open(wrapped_path, "rb").read()
+        blob = open(args.wrapped_key, "rb").read()
     except OSError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
     piv = get_piv_session()
-    plaintext = unwrap(blob, piv)
+
+    slot = find_slot_by_cn(piv, cn)
+    if slot is None:
+        print(f"ERROR: no slot with CN={cn} found on Yubikey", file=sys.stderr)
+        sys.exit(1)
+    print(f"Using slot {slot.name} (0x{slot.value:02x}, CN={cn})", file=sys.stderr)
+
+    plaintext = unwrap(blob, piv, slot)
     sys.stdout.buffer.write(plaintext)
 
 

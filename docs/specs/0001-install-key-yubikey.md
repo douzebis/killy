@@ -23,29 +23,40 @@ never written to disk.
 
 ## Yubikey slot
 
-The PIV **Key Management slot (0x9d)** is used. This is the standard slot
-designed for asymmetric key unwrapping (originally for S/MIME session key
-decryption) and is present on every PIV-capable Yubikey.
+A PIV **retired key management slot** (0x82–0x95) is used, identified by a
+self-signed certificate with `CN=<hostname>-install-key` (e.g.
+`CN=killy-install-key`). This avoids conflicts with standard PIV usage (SSH
+auth on 0x9a, S/MIME on 0x9d) and allows a single Yubikey to hold install
+keys for multiple hosts in separate slots.
 
-Using 0x9d means the workflow works with any Yubikey without requiring a
-dedicated device or a dedicated slot. If the slot is later overwritten (e.g.
-for S/MIME or VPN use), recovery is straightforward: generate a new age key,
-re-wrap it, and run `sops updatekeys` using the operator key. No secrets are
-lost because the secrets bundle is always decryptable via the operator key.
+The slot is discovered at runtime by scanning retired slots for the matching
+CN — no hardcoded slot number anywhere.
 
-The current Yubikey (serial 32283437) has slot 0x9d empty — a key will be
-generated during setup.
+The key is generated with `PIN_POLICY=NEVER` and `TOUCH_POLICY=NEVER` so that
+unwrapping is fully unattended. Physical presence of both the installer image
+and the Yubikey is the sole protection: an attacker must steal both objects to
+unwrap the install key. This trade-off is accepted for an unattended server
+install context.
+
+If the slot is later overwritten, recovery is straightforward: generate a new
+age key, re-run `yk-setup.py --hostname killy`, and run `sops updatekeys`
+using the operator key. No secrets are lost.
 
 ---
 
 ## Goals
 
 1. Implement `scripts/yk-setup.py` — run once per Yubikey on the build host:
-   - If slot 0x9d has no key: generate a P-256 key pair on-device.
-   - Wrap the age install key with the 0x9d public key.
+   - Scan retired slots (0x82–0x95) for `CN=<hostname>-install-key`.
+   - If found and `--force` not set: reuse that slot's key.
+   - If not found: pick the first free retired slot, generate a P-256 key
+     with `PIN_POLICY=NEVER` and `TOUCH_POLICY=NEVER`, store a self-signed
+     certificate with `CN=<hostname>-install-key`.
+   - Wrap the age install key with the slot's public key.
    - Write `killy/wrapped-install-key.bin`.
 2. Implement `scripts/yk-unwrap.py` — run at install time (or on the build
-   host): unwrap using slot 0x9d, print the plaintext age key to stdout.
+   host): scan retired slots for `CN=<hostname>-install-key`, unwrap without
+   PIN, print the plaintext age key to stdout.
 3. Demonstrate end-to-end: generate an age key, wrap it, recover it via the
    Yubikey, and use it to decrypt a SOPS file.
 
@@ -89,12 +100,14 @@ generated during setup.
 
 ### Cryptographic mechanism
 
-**Key generation (if slot 0x9d is empty):**
+**Slot discovery:**
 
-Generate a P-256 key pair inside Yubikey PIV slot 0x9d. The private key is
-generated on-device and never exported. No certificate is required; the public
-key is exported directly with `PivSession.get_certificate` or, if no
-certificate exists, via `ykman piv keys export`.
+Scan all retired slots (0x82–0x95) for a self-signed certificate with
+`CN=<hostname>-install-key`. If found, use that slot. If not found, pick the
+first free retired slot and generate a P-256 key pair on-device with
+`PIN_POLICY=NEVER` and `TOUCH_POLICY=NEVER`, then store a self-signed
+certificate with `CN=<hostname>-install-key` as a label. The private key is
+generated on-device and never exported.
 
 **Wrap (setup):**
 
@@ -110,21 +123,28 @@ certificate exists, via `ykman piv keys export`.
 
 1. Read `killy/wrapped-install-key.bin`.
 2. Parse: `ephemeral_pubkey(65) || nonce(12) || ciphertext+tag`.
-3. Call `PivSession.calculate_secret(SLOT.KEY_MANAGEMENT, ephemeral_pubkey)` —
-   the Yubikey performs ECDH on-device. Requires PIN.
-4. Derive the AES key with HKDF-SHA256 and same parameters.
-5. Decrypt with AES-256-GCM (authentication tag verified — detects tampering).
-6. Print plaintext age key to stdout.
+3. Scan retired slots for `CN=<hostname>-install-key` to find the slot.
+4. Call `PivSession.calculate_secret(slot, ephemeral_pubkey)` — the Yubikey
+   performs ECDH on-device. No PIN required (`PIN_POLICY=NEVER`).
+5. Derive the AES key with HKDF-SHA256 and same parameters.
+6. Decrypt with AES-256-GCM (authentication tag verified — detects tampering).
+7. Print plaintext age key to stdout.
 
 ### Script interfaces
 
 ```
 # One-time setup (build host)
-python3 scripts/yk-setup.py --age-key /path/to/install.key \
+python3 scripts/yk-setup.py --hostname killy \
+                             --age-key /path/to/install.key \
                              --out killy/wrapped-install-key.bin
 
-# Unwrap (build host or installer image)
-python3 scripts/yk-unwrap.py killy/wrapped-install-key.bin
+# Re-run after key compromise (forces regeneration)
+python3 scripts/yk-setup.py --hostname killy --force \
+                             --age-key /path/to/new-install.key \
+                             --out killy/wrapped-install-key.bin
+
+# Unwrap (build host or installer image — no PIN, no TTY required)
+python3 scripts/yk-unwrap.py --hostname killy killy/wrapped-install-key.bin
 ```
 
 Both scripts use `PivSession` from the `ykman` Python library directly (no
@@ -137,39 +157,43 @@ a recipient. It can be re-derived at any time from the wrapped file using the
 Yubikey:
 
 ```bash
-python3 scripts/yk-unwrap.py killy/wrapped-install-key.bin | age-keygen -y
+python3 scripts/yk-unwrap.py --hostname killy killy/wrapped-install-key.bin \
+  | age-keygen -y
 ```
 
-To decrypt a SOPS file at install time:
+To decrypt a SOPS file at install time (no TTY required):
 
 ```bash
-SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py killy/wrapped-install-key.bin) \
-  sops decrypt killy/acme/ovh-creds.yaml
+SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py --hostname killy \
+                 killy/wrapped-install-key.bin) \
+  sops decrypt killy/install-secrets.yaml
 ```
 
 The plaintext key lives only in the environment variable — in RAM, never on disk.
 
 ---
 
-## Recovery procedure (if slot 0x9d is overwritten)
+## Recovery procedure (if the install slot is lost or compromised)
 
-1. Generate a new age key:
+1. Generate a new age key in a private temp directory:
    ```bash
-   age-keygen -o /tmp/new-install.key
-   AGE_PUB=$(age-keygen -y /tmp/new-install.key)
+   mkdir -m 700 /tmp/yk-setup
+   age-keygen -o /tmp/yk-setup/install.key
    ```
-2. Re-run setup with the new Yubikey state:
+2. Re-run setup (`--force` regenerates the on-device key if the CN is still
+   present; omit `--force` if the slot was cleared externally):
    ```bash
-   python3 scripts/yk-setup.py --age-key /tmp/new-install.key \
-                                --out killy/wrapped-install-key.bin
-   shred -u /tmp/new-install.key
+   python3 scripts/yk-setup.py --hostname killy --force \
+     --age-key /tmp/yk-setup/install.key \
+     --out killy/wrapped-install-key.bin
+   shred -u /tmp/yk-setup/install.key && rmdir /tmp/yk-setup
    ```
-3. Update SOPS recipients (operator key authorizes this):
+3. Update `.sops.yaml` with the new age public key (replace the old one).
+4. Update SOPS recipients (operator key authorizes this — no Yubikey needed):
    ```bash
-   sops updatekeys killy/acme/ovh-creds.yaml
-   # ... repeated for all secrets files
+   sops updatekeys killy/install-secrets.yaml
    ```
-4. Update `.sops.yaml` with the new age public key, commit.
+5. Commit `killy/wrapped-install-key.bin`, `.sops.yaml`, updated secrets files.
 
 No secrets are lost: all secrets bundle files remain decryptable via the
 operator key throughout.
@@ -182,26 +206,29 @@ Run on the build host with the Yubikey plugged in:
 
 ```bash
 # 1. Generate a test age key
-age-keygen -o /tmp/test-install.key
-AGE_PUB=$(age-keygen -y /tmp/test-install.key)
+mkdir -m 700 /tmp/yk-test
+age-keygen -o /tmp/yk-test/install.key
+AGE_PUB=$(grep 'public key' /tmp/yk-test/install.key | awk '{print $NF}')
 
-# 2. Setup: initialize slot 0x9d if needed, wrap the age key
+# 2. Setup: find or create slot with CN=killy-install-key, wrap the age key
 python3 scripts/yk-setup.py \
-  --age-key /tmp/test-install.key \
-  --out /tmp/wrapped-install-key.bin
-shred -u /tmp/test-install.key
+  --hostname killy \
+  --age-key /tmp/yk-test/install.key \
+  --out /tmp/yk-test/wrapped.bin
+shred -u /tmp/yk-test/install.key
 
 # 3. Create a test SOPS secret encrypted to the install key
 echo '{"test": "hello killy"}' | \
   sops --encrypt --age "$AGE_PUB" \
        --input-type json --output-type json /dev/stdin \
-  > /tmp/test-secret.yaml
+  > /tmp/yk-test/secret.yaml
 
-# 4. Decrypt using the Yubikey (PIN prompted)
-SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py /tmp/wrapped-install-key.bin) \
-  sops --decrypt /tmp/test-secret.yaml
+# 4. Decrypt using the Yubikey (no PIN required)
+SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py --hostname killy /tmp/yk-test/wrapped.bin) \
+  sops --decrypt /tmp/yk-test/secret.yaml
 
 # Expected output: {"test": "hello killy"}
+rm -rf /tmp/yk-test
 ```
 
 ---
@@ -218,10 +245,12 @@ SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py /tmp/wrapped-install-key.bin) \
 
 ## Open questions
 
-1. **Existing slot 0x9d content**: if a future Yubikey already has a key in
-   slot 0x9d (from prior PIV use), `yk-setup.py` must use it as-is rather than
-   overwriting it. The script should detect this and skip key generation.
+1. **Management key**: `yk-setup.py` currently assumes the default 3DES
+   management key. If the Yubikey has a custom management key, the script will
+   fail at key generation. Out of scope for this spec.
 
-2. **PIN requirement**: the Yubikey is currently using the **default PIN
-   (123456)**. This must be changed before production use. Out of scope for
-   this spec.
+2. **Multiple Yubikeys**: the design supports multiple Yubikeys (each gets its
+   own slot with `CN=killy-install-key`), but `killy/wrapped-install-key.bin`
+   stores only one wrapped blob — the one produced by the most recent
+   `yk-setup.py` run. Supporting multiple Yubikeys would require storing one
+   wrapped blob per device. Out of scope for this spec.
