@@ -1,0 +1,11 @@
+creation_rules:
+  - path_regex: killy/install-secrets\.yaml$
+    encrypted_regex: ^(acme_creds|s3_creds|mail_creds|mail\.private)$
+    age:
+      # killy host key (derived from SSH host ed25519 key via ssh-to-age)
+      # — replaced on each reinstall via `sops updatekeys`
+      - age10tw9w9wce66sc4xu8nt9l6kg5222aede5mry7guk3p67ulmat40sljdu7t
+      # operator key (~/.config/sops/age/keys.txt on build host)
+      # — TODO: add once operator key is generated
+      # install key (Yubikey PIV slot 0x9d, unwrapped via yk-unwrap.py)
+      # — TODO: add once yk-setup.py has been run
