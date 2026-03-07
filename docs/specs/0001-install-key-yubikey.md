@@ -166,7 +166,7 @@ To decrypt a SOPS file at install time (no TTY required):
 ```bash
 SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py --hostname killy \
                  killy/wrapped-install-key.bin) \
-  sops decrypt killy/install-secrets.yaml
+  sops decrypt killy/install-config.yaml
 ```
 
 The plaintext key lives only in the environment variable — in RAM, never on disk.
@@ -191,7 +191,7 @@ The plaintext key lives only in the environment variable — in RAM, never on di
 3. Update `.sops.yaml` with the new age public key (replace the old one).
 4. Update SOPS recipients (operator key authorizes this — no Yubikey needed):
    ```bash
-   sops updatekeys killy/install-secrets.yaml
+   sops updatekeys killy/install-config.yaml
    ```
 5. Commit `killy/wrapped-install-key.bin`, `.sops.yaml`, updated secrets files.
 

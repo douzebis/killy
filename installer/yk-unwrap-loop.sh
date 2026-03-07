@@ -7,10 +7,11 @@
 
 set -euo pipefail
 
-WRAPPED_KEY=/etc/nixos/killy/wrapped-install-key.bin
+# HOSTNAME is injected by the systemd service Environment= directive
+: "${HOSTNAME:?HOSTNAME must be set by the calling service}"
+WRAPPED_KEY=/etc/nixos/${HOSTNAME}/wrapped-install-key.bin
 UNWRAP_SCRIPT=/etc/nixos/scripts/yk-unwrap.py
 OUT=/run/age-install-key
-HOSTNAME=killy
 
 while true; do
   ERR=$(python3 "$UNWRAP_SCRIPT" --hostname "$HOSTNAME" "$WRAPPED_KEY" \

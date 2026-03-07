@@ -22,7 +22,7 @@ unwrapped from the Yubikey.
 
 ## Goals
 
-1. Build a bootable NixOS ISO via a flake output (`.#installer-iso`).
+1. Build a bootable NixOS ISO via a flake output (`.#installer-iso-killy`).
 2. On boot:
    a. Enable serial console on `ttyUSB0` at 115200 baud (USB-serial adapter,
       null-modem cable to build host).
@@ -32,7 +32,7 @@ unwrapped from the Yubikey.
    c. Export `SOPS_AGE_KEY` into the default user's login session.
 3. Allow the default user (`nixos`) to log in without a password on the
    serial console and on `tty0`.
-4. Allow the default user to run `sops decrypt killy/install-secrets.yaml`
+4. Allow the default user to run `sops decrypt killy/install-config.yaml`
    successfully using the unwrapped age key.
 
 ---
@@ -51,16 +51,16 @@ unwrapped from the Yubikey.
 
 ### Flake output
 
-Add a `nixosConfigurations.installer` entry to `flake.nix` (to be created).
+Add a `nixosConfigurations.installer-killy` entry to `flake.nix` (to be created).
 The ISO is produced by:
 
 ```bash
-nix build .#installer-iso
+nix build .#installer-iso-killy
 # result/iso/nixos-installer-*.iso
 ```
 
 The flake uses `nixpkgs.lib.nixosSystem` with a custom module
-`installer/iso.nix` as its configuration.
+`killy/iso.nix` as its configuration.
 
 ### Serial console
 
@@ -181,7 +181,7 @@ The scripts and secrets bundle must be accessible at runtime. Two options:
 Option A is preferred: it keeps the ISO self-contained and avoids network
 dependency. Only the files needed for this spec are included:
 `scripts/yk-unwrap.py`, `killy/wrapped-install-key.bin`, `.sops.yaml`,
-`killy/install-secrets.yaml`.
+`killy/install-config.yaml`.
 
 ### Packages
 
@@ -204,9 +204,10 @@ services.pcscd.enable = true;
 
 | Path | Description |
 |---|---|
-| `flake.nix` | Flake with `nixosConfigurations.installer` and `packages.installer-iso` |
-| `installer/iso.nix` | NixOS module defining the installer ISO configuration |
-| `installer/yk-unwrap-loop.sh` | Retry wrapper called by `yk-unwrap.service` |
+| `flake.nix` | Flake with `nixosConfigurations.installer-killy` and `packages.installer-iso-killy` |
+| `installer/base.nix` | Shared NixOS ISO base module (serial console, pcscd, yk-unwrap service, profile.d) |
+| `installer/yk-unwrap-loop.sh` | Retry wrapper called by `yk-unwrap.service`; HOSTNAME injected by service |
+| `killy/iso.nix` | killy-specific ISO module (imports base.nix, sets installer.* options) |
 
 ---
 
@@ -216,7 +217,7 @@ On the build host:
 
 ```bash
 # 1. Build the ISO
-nix build .#installer-iso
+nix build .#installer-iso-killy
 
 # 2. Write to USB key (replace /dev/sdX)
 dd if=result/iso/nixos-installer-*.iso of=/dev/sdX bs=4M status=progress
@@ -231,7 +232,7 @@ dd if=result/iso/nixos-installer-*.iso of=/dev/sdX bs=4M status=progress
 #    - Login prompt appears for nixos (no password)
 
 # 5. After login, verify:
-sops decrypt /etc/nixos/killy/install-secrets.yaml | head -3
+sops decrypt /etc/nixos/killy/install-config.yaml | head -3
 # Expected: ovh: acme_creds: ...
 ```
 

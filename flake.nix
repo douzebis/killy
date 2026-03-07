@@ -1,5 +1,5 @@
 {
-  description = "killy — installer image and system configuration";
+  description = "killy — installer images and system configurations";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -7,18 +7,18 @@
 
   outputs = { self, nixpkgs }: let
     system = "x86_64-linux";
-    pkgs = nixpkgs.legacyPackages.${system};
   in {
-    # Dev shell (mirrors default.nix for nix-shell compatibility)
-    devShells.${system}.default = import ./default.nix { inherit pkgs; };
+    # Build-host dev shell
+    devShells.${system}.default =
+      import ./default.nix { pkgs = nixpkgs.legacyPackages.${system}; };
 
-    # Installer ISO
-    nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
+    # killy installer ISO
+    nixosConfigurations.installer-killy = nixpkgs.lib.nixosSystem {
       inherit system;
-      modules = [ ./installer/iso.nix ];
+      modules = [ ./killy/iso.nix ];
     };
 
-    packages.${system}.installer-iso =
-      self.nixosConfigurations.installer.config.system.build.isoImage;
+    packages.${system}.installer-iso-killy =
+      self.nixosConfigurations.installer-killy.config.system.build.isoImage;
   };
 }

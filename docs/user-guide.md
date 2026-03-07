@@ -22,7 +22,7 @@ The dev shell provides: `age`, `ssh-to-age`, `sops`, `yubikey-manager`,
 
 ## Secrets management
 
-Secrets live in `killy/install-secrets.yaml`, encrypted with SOPS/age.
+Secrets live in `killy/install-config.yaml`, encrypted with SOPS/age.
 
 Three recipients are registered in `.sops.yaml`:
 
@@ -37,13 +37,13 @@ Three recipients are registered in `.sops.yaml`:
 The operator key in `~/.config/sops/age/keys.txt` is picked up automatically:
 
 ```bash
-sops decrypt killy/install-secrets.yaml
+sops decrypt killy/install-config.yaml
 ```
 
 ### Edit a secrets file
 
 ```bash
-sops edit killy/install-secrets.yaml
+sops edit killy/install-config.yaml
 ```
 
 ### Decrypt using the Yubikey (install key)
@@ -53,7 +53,7 @@ Plug in the Yubikey, then:
 ```bash
 SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py --hostname killy \
                  killy/wrapped-install-key.bin) \
-  sops decrypt killy/install-secrets.yaml
+  sops decrypt killy/install-config.yaml
 ```
 
 No PIN is required — the install slot uses `PIN_POLICY=NEVER` for unattended
@@ -125,7 +125,7 @@ safe to call from scripts and systemd units.
 ```bash
 SOPS_AGE_KEY=$(python3 scripts/yk-unwrap.py --hostname killy \
                  killy/wrapped-install-key.bin) \
-  sops decrypt killy/install-secrets.yaml
+  sops decrypt killy/install-config.yaml
 ```
 
 **Re-derive the install key's age public key** (e.g. after losing track of it):
@@ -148,7 +148,7 @@ If the Yubikey is lost, replaced, or the install slot is compromised:
 3. Re-encrypt the secrets file for the new recipient (operator key authorizes
    this — no Yubikey needed):
    ```bash
-   sops updatekeys killy/install-secrets.yaml
+   sops updatekeys killy/install-config.yaml
    ```
 4. Commit `killy/wrapped-install-key.bin`, `.sops.yaml`, and the updated
    secrets file.
@@ -212,7 +212,7 @@ chmod 600 ~/.config/sops/age/keys.txt
 Verify that SOPS can decrypt:
 
 ```bash
-sops decrypt killy/install-secrets.yaml | head -3
+sops decrypt killy/install-config.yaml | head -3
 ```
 
 ---
@@ -232,7 +232,7 @@ still to be built:
 
 ### What is already in place
 
-- `killy/install-secrets.yaml` — all secrets encrypted, three recipients
+- `killy/install-config.yaml` — all secrets encrypted, three recipients
 - `killy/wrapped-install-key.bin` — install key wrapped in Yubikey serial
   32283437, slot 0x9d
 - `.sops.yaml` — creation rules with all three recipients registered
