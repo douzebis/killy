@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # yk-unwrap-loop.sh — unwrap age install key from Yubikey, retrying until present.
 #
 # Called by yk-unwrap.service at boot. Writes the plaintext age key to
