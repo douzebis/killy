@@ -66,7 +66,7 @@ in {
 
     security.sudo.wheelNeedsPassword = false;
 
-    services.getty.autologinUser = lib.mkForce null;
+    services.getty.autologinUser = lib.mkForce "nixos";
 
     # -------------------------------------------------------------------------
     # PC/SC daemon (required by yk-unwrap.py)

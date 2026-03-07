@@ -23,14 +23,11 @@ The FT232 adapter appears as `/dev/ttyUSB0` inside the VM. Connect to
 killy's serial console with:
 
 ```bash
-sudo screen /dev/ttyUSB0 115200
-# or: sudo minicom -D /dev/ttyUSB0 -b 115200
+screen /dev/ttyUSB0 115200
+# or: minicom -D /dev/ttyUSB0 -b 115200
 ```
 
-Note: `/dev/ttyUSB0` is owned by group `dialout`. The `experiment` user is
-not in that group, so `sudo` is required. To fix permanently, add
-`users.users.experiment.extraGroups = [ "dialout" ]` to the VM's NixOS
-configuration.
+The `experiment` user is in the `dialout` group so no `sudo` is needed.
 
 The Lexar drive appears as `/dev/sda` inside the VM (confirm with `lsblk`
 before writing the ISO — device assignment can change if other USB storage
@@ -121,6 +118,9 @@ EOF
 ---
 
 ## Prerequisites
+
+The `experiment` VM user has no password and passwordless `sudo`. No
+credentials are needed for local login or privilege escalation.
 
 Enter the dev shell before running any script or SOPS command:
 
