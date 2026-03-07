@@ -6,6 +6,120 @@ repo checked out and the `nix-shell` dev environment available.
 
 ---
 
+## Build host setup
+
+### USB devices passed through to the `experiment` VM
+
+The following USB devices are attached to the build host and passed through
+to the `experiment` VM via libvirt:
+
+| Device | Vendor:Product | Purpose |
+|---|---|---|
+| Yubico YubiKey 5 NFC (serial 32283437) | `1050:0407` | Install key unwrapping (PIV slot RETIRED2, `CN=killy-install-key`) |
+| Lexar USB Flash Drive | `21c4:0809` | Installer key — write ISO here, boot killy from it |
+| FTDI FT232 Serial (UART) | `0403:6001` | Null-modem USB-serial cable to killy's serial console |
+
+The FT232 adapter appears as `/dev/ttyUSB0` inside the VM. Connect to
+killy's serial console with:
+
+```bash
+sudo screen /dev/ttyUSB0 115200
+# or: sudo minicom -D /dev/ttyUSB0 -b 115200
+```
+
+Note: `/dev/ttyUSB0` is owned by group `dialout`. The `experiment` user is
+not in that group, so `sudo` is required. To fix permanently, add
+`users.users.experiment.extraGroups = [ "dialout" ]` to the VM's NixOS
+configuration.
+
+The Lexar drive appears as `/dev/sda` inside the VM (confirm with `lsblk`
+before writing the ISO — device assignment can change if other USB storage
+is present).
+
+### Libvirt XML for the `experiment` VM (persistent config)
+
+The three `<hostdev>` entries in the domain XML (`sudo virsh edit experiment`
+on the build host):
+
+```xml
+<!-- Yubikey -->
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source startupPolicy='optional'>
+    <vendor id='0x1050'/>
+    <product id='0x0407'/>
+  </source>
+</hostdev>
+
+<!-- Lexar USB Flash Drive (installer key) -->
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source startupPolicy='optional'>
+    <vendor id='0x21c4'/>
+    <product id='0x0809'/>
+  </source>
+</hostdev>
+
+<!-- FTDI FT232 (null-modem serial to killy) -->
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source startupPolicy='optional'>
+    <vendor id='0x0403'/>
+    <product id='0x6001'/>
+  </source>
+</hostdev>
+```
+
+All three use `managed='yes'` (libvirt unbinds host drivers automatically
+before passthrough and rebinds on VM shutdown) and `startupPolicy='optional'`
+(VM starts even if a device is absent). Vendor/product matching is used
+rather than bus/device address, so entries survive replug and reboot without
+going stale.
+
+### Adding a new USB device to the VM
+
+1. On the build host, identify the device vendor/product ID:
+   ```bash
+   lsusb
+   # e.g. Bus 003 Device 009: ID 0403:6001 Future Technology Devices ...
+   #                              ^^^^ ^^^^
+   #                              vendor product
+   ```
+
+2. Attach it to the running VM and persist the config:
+   ```bash
+   sudo virsh attach-device experiment --config --live /dev/stdin <<'EOF'
+   <hostdev mode='subsystem' type='usb' managed='yes'>
+     <source startupPolicy='optional'>
+       <vendor id='0xVVVV'/>
+       <product id='0xPPPP'/>
+     </source>
+   </hostdev>
+   EOF
+   ```
+   Replace `0xVVVV` and `0xPPPP` with the vendor and product IDs.
+   `--config` persists across VM reboots; `--live` applies immediately.
+
+3. Verify inside the VM:
+   ```bash
+   nix-shell -p usbutils --run lsusb
+   ```
+
+### Removing a USB device from the VM
+
+Edit the XML directly to avoid matching issues with libvirt:
+```bash
+sudo virsh edit experiment
+# Find and delete the relevant <hostdev> block, save and quit.
+```
+
+To also hot-remove from the running VM, note the full block including
+`<alias>` and outer `<address>` from `sudo virsh dumpxml experiment`, then:
+```bash
+sudo virsh detach-device experiment --live /dev/stdin <<'EOF'
+<hostdev ...>...</hostdev>
+EOF
+```
+
+---
+
 ## Prerequisites
 
 Enter the dev shell before running any script or SOPS command:
