@@ -196,6 +196,13 @@ in {
         mode   = "0755";
       };
 
+      # Installer-side helper scripts (on PATH in the installer shell).
+      # Common to all hosts — reads hostname and disk spec from install-config.yaml.
+      "nixos/installer/bin/install" = {
+        source = ./bin/install;
+        mode   = "0755";
+      };
+
     };
 
     # -------------------------------------------------------------------------
@@ -361,8 +368,10 @@ in {
       if [ -r /run/age-install-key ]; then
         export SOPS_AGE_KEY=$(cat /run/age-install-key)
       fi
-      # Put repo helpers (install, build-iso, killy-serial, etc.) on PATH.
-      export PATH="/etc/nixos/bin:$PATH"
+      # Put installer helpers on PATH (install, etc.).
+      # Note: build-host tools (build-iso, killy-serial, killy-setup) live in
+      # bin/ and are NOT added here — they don't belong on the installer.
+      export PATH="/etc/nixos/installer/bin:$PATH"
     '';
 
     # -------------------------------------------------------------------------

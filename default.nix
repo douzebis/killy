@@ -21,9 +21,13 @@ let
       # to this repo (see ~/.claude/hooks/claude-hook-post-edit-lint).
       export NIXSHELL_REPO="${toString ./.}"
 
-      # Put repo helper scripts on PATH so they can be called by name:
-      #   build-iso       — build the installer ISO for a given host
-      #   killy-serial    — send commands to killy's serial console
+      # Put build-host helper scripts on PATH so they can be called by name:
+      #   build-iso        — build the installer ISO for a given host
+      #   killy-serial     — send commands to killy's serial console
+      #   killy-setup      — wizard to populate install-config.yaml disk spec
+      #   killy-smoke-test — post-install smoke test
+      # Note: installer-side scripts (install) live in installer/bin/ and are
+      # NOT added here — they must not be on PATH on the build host.
       export PATH="${toString ./.}/bin:$PATH"
     '';
 
@@ -73,6 +77,10 @@ let
       # bash and jq — shell scripting and JSON parsing used by helper scripts.
       bash
       jq
+
+      # pv — pipe viewer, shows progress and throughput when piping data.
+      # Useful when streaming ISOs over SSH (build-iso → dd to killy's Lexar).
+      pv
 
       # ruff — Python linter for scripts/. Run manually: ruff check scripts/
       ruff
