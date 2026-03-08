@@ -3,7 +3,7 @@
 #
 # Run this from the live installer shell on killy (available on PATH):
 #
-#   killy-install
+#   sudo killy-install
 #
 # What this does:
 #   1. Reads install.disks from /etc/nixos/killy/install-config.yaml.
@@ -14,7 +14,8 @@
 #   5. Generates SSH host key, derives host age key.
 #   6. Updates .sops.yaml (overlay) and re-encrypts install-config.yaml
 #      for the new host key using the install key (SOPS_AGE_KEY).
-#   7. Copies repo to /mnt/etc/nixos (killy-relevant files only).
+#   7. Copies full repo from ISO to /mnt/etc/nixos, then places the freshly
+#      generated hardware-configuration.nix into killy/system/.
 #   8. Runs nixos-install --flake /mnt/etc/nixos#killy.
 #   9. Unmounts and reboots.
 #
@@ -265,9 +266,10 @@ def setup_host_age_key(age_key):
         CONFIG_PATH.write_bytes(real)
     env = os.environ.copy()
     env["SOPS_AGE_KEY"] = age_key
+    # Run from /etc/nixos so sops can find .sops.yaml by directory traversal.
     result = subprocess.run(
         ["sops", "updatekeys", "--yes", str(CONFIG_PATH)],
-        env=env
+        env=env, cwd="/etc/nixos"
     )
     if result.returncode != 0:
         bail("sops updatekeys failed")
@@ -283,18 +285,18 @@ def copy_repo():
     dest.mkdir(parents=True, exist_ok=True)
     src = Path("/etc/nixos")
 
-    for d in ["bin", "installer", "killy", "lib", "scripts"]:
+    # Copy the full repo tree embedded in the ISO.
+    for d in ["installer", "killy", "scripts"]:
         if (src / d).exists():
             run(f"cp -r {src / d} {dest / d}")
 
-    for f in ["flake.nix", "flake.lock", "default.nix", "shell.nix", "ruff.toml"]:
+    for f in ["flake.nix", "flake.lock", ".sops.yaml"]:
         if (src / f).exists():
             run(f"cp {src / f} {dest / f}")
 
-    # .sops.yaml is a dotfile — handle explicitly
-    run(f"cp {src / '.sops.yaml'} {dest / '.sops.yaml'}")
-
-    # Copy freshly generated hardware-configuration.nix into system dir
+    # Place the freshly generated hardware-configuration.nix.
+    # killy/system/ exists (copied above); hardware-configuration.nix is not
+    # in the ISO (generated fresh each install).
     hw_src = dest / "hardware-configuration.nix"
     hw_dst = dest / "killy" / "system" / "hardware-configuration.nix"
     if hw_src.exists():

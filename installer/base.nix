@@ -88,6 +88,23 @@ in {
       '';
     };
 
+    flakeSrc = lib.mkOption {
+      type        = lib.types.path;
+      description = ''
+        Path to the repository flake.nix. Embedded at /etc/nixos/flake.nix.
+        Required by nixos-install --flake /mnt/etc/nixos#<hostname> to locate
+        the nixosConfigurations entry for the target host.
+      '';
+    };
+
+    flakeLock = lib.mkOption {
+      type        = lib.types.path;
+      description = ''
+        Path to the repository flake.lock. Embedded at /etc/nixos/flake.lock.
+        Pins the exact nixpkgs revision used by nixos-install.
+      '';
+    };
+
     wifiInterface = lib.mkOption {
       type        = lib.types.str;
       default     = "wlo1";
@@ -180,6 +197,10 @@ in {
       "nixos/${cfg.hostname}/wrapped-install-key.bin".source = cfg.wrappedKey;
       "nixos/${cfg.hostname}/install-config.yaml".source     = cfg.configFile;
       "nixos/.sops.yaml".source                              = cfg.sopsYaml;
+
+      # Flake entry point — required by nixos-install --flake /mnt/etc/nixos#<host>
+      "nixos/flake.nix".source  = cfg.flakeSrc;
+      "nixos/flake.lock".source = cfg.flakeLock;
 
       # Scripts called by the systemd services below.
       # They live in /etc so they can be read and debugged by the operator.
