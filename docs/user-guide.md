@@ -532,7 +532,8 @@ SSH key is embedded in the ISO (see `installer/base.nix`).
 #### Step 1 — Populate the disk spec (first install only)
 
 Run the setup wizard from the build host. It SSHes into the installer,
-enumerates the drives, and populates `install.disks` in `install-config.yaml`:
+enumerates the drives, auto-selects them (smallest = OS, largest = data),
+and writes `install.disks` into `install-config.yaml`:
 
 ```bash
 cd ~/code/killy
@@ -540,18 +541,18 @@ nix-shell
 bin/killy-setup 192.168.42.44
 ```
 
-Follow the prompts to select the OS drive (`nvme0n1`) and data drive
-(`nvme1n1`). The wizard writes and re-encrypts `install-config.yaml`
-automatically. Skip this step on reinstalls if the disk configuration is
+No prompts — the proposal is written unconditionally. Review the printed
+output and edit `install-config.yaml` manually if the drive selection needs
+adjustment. Skip this step on reinstalls if the disk configuration is
 unchanged.
 
 #### Step 2 — Run the installer
 
-SSH into the live installer and type `install`:
+SSH into the live installer and run `killy-install`:
 
 ```bash
 ssh nixos@192.168.42.44
-install
+sudo killy-install
 ```
 
 The script validates that the physical drives match the spec in
@@ -579,14 +580,18 @@ Copy the generated hardware config and updated secrets back to the repo:
 
 ```bash
 cd ~/code/killy
-scp fred@192.168.42.44:/etc/nixos/killy/system/hardware-configuration.nix \
-    killy/system/hardware-configuration.nix
 scp fred@192.168.42.44:/etc/nixos/killy/install-config.yaml \
     killy/install-config.yaml
 scp fred@192.168.42.44:/etc/nixos/.sops.yaml .sops.yaml
-git add killy/system/hardware-configuration.nix killy/install-config.yaml .sops.yaml
-git commit -m "killy: post-install — hardware-configuration, updated host age key"
+git add killy/install-config.yaml .sops.yaml
+git commit -m "killy: post-install — updated host age key in install-config and .sops.yaml"
 ```
+
+Note: `hardware-configuration.nix` is intentionally not tracked in git — it
+is generated fresh by `killy-install` on each install and is specific to the
+installed partitions. It lives on the running system at
+`/etc/nixos/killy/system/hardware-configuration.nix` and is deployed via
+`nixos-rebuild` from there.
 
 #### Step 5 — Deploy config changes
 
