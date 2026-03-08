@@ -420,7 +420,7 @@ in {
       cryptsetup      # LUKS inspection (cryptsetup luksDump)
       e2fsprogs       # fsck, tune2fs
       dosfstools      # EFI partition tools (fsck.fat, mkfs.fat)
-      (python3.withPackages (ps: [ ps.pyyaml ]))  # scripting + yaml parsing (bin/install)
+      (python3.withPackages (ps: [ ps.pyyaml ]))  # scripting + yaml parsing (killy-install)
     ];
   };
 }

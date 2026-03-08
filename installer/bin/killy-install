@@ -206,8 +206,7 @@ def mount_data(dev, spec):
 
 def setup_host_age_key(age_key):
     host_age_pub = run_capture(
-        "nix-shell -I nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos "
-        "-p ssh-to-age --run 'ssh-to-age -i /mnt/etc/ssh/ssh_host_ed25519_key.pub'"
+        "ssh-to-age -i /mnt/etc/ssh/ssh_host_ed25519_key.pub"
     )
     print(f"\n  Host age public key: {host_age_pub}")
     print("  (Record this — update .sops.yaml on the build host after install)")
