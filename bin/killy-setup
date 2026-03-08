@@ -126,13 +126,11 @@ def main():
     data_drive = drives[-1] if len(drives) > 1 else None
 
     os_size_gb   = gb(os_drive["size"])
-    os_min_gb    = max(100, os_size_gb - 20)
     os_model     = (os_drive.get("model") or "").strip()
 
     os_section = {
-        "device":             f"/dev/{os_drive['name']}",
         "model":              os_model,
-        "min_size_gb":        os_min_gb,
+        "size_gb":            os_size_gb,
         "efi_size_mb":        EFI_SIZE_MB,
         "root_fs":            ROOT_FS,
         "root_mount_options": ROOT_OPTS,
@@ -143,14 +141,12 @@ def main():
 
     if data_drive:
         data_size_gb  = gb(data_drive["size"])
-        data_min_gb   = max(100, data_size_gb - 20)
         data_model    = (data_drive.get("model") or "").strip()
         mail_size_gb  = data_size_gb - SRV_SIZE_GB
 
         data_section = {
-            "device":      f"/dev/{data_drive['name']}",
-            "model":       data_model,
-            "min_size_gb": data_min_gb,
+            "model":    data_model,
+            "size_gb":  data_size_gb,
             "partitions": [
                 {"mount": "/srv",      "size_gb": SRV_SIZE_GB,   "fs": DATA_FS, "mount_options": DATA_OPTS},
                 {"mount": "/var/mail", "size_gb": mail_size_gb,  "fs": DATA_FS, "mount_options": DATA_OPTS},

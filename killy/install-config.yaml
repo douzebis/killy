@@ -1,13 +1,11 @@
 dkim:
-    mail.private: ENC[AES256_GCM,data:eNMJYWylVdQh2cuVhvst43tGPOi5n+BASmICDb3wZhmTjBxABZkhI5AtDk6A+J3jJv+ZhMRtpca2rjzkfKn2nNWM2do+QkrmlLtvKE/SYFzHx4Kcd+7LHt7dxvdElVNt1CkZZU9dgfaW3t/8bQjY7SZtT05FXo2I8Oc1Rm0IS4VLwlMqXfmPdSwqrN9pWp6iRqrwfQduBUx4pCRiYPSLFp7fEQhP+qgxq3xQysJvplFw7+nslqrnHBt9p59C0xRyWbntrGHKu8nH2tqI/Z6/J5CLpfQHm5t5z8/HkAWzDKoF6Jw7DO+9GCLbiXF9NyhCWyqV3XJTUsJ2lsTFehHjWg1Quh+exGJK6HmcpQn9hidSaPN7EAX6XHmxeP5EdjJvGn373JXUIeb5ujWt4MmUkcLPaqJxzwvDdyOqyuGoRlbNUbkGhXYLbRUVqEZZ3RoQOxthFifbDdb0IWKuip2BZTwA7sEU3LdC9n3Q9xKPNUJ5fp8WSMHr5mYogzTSY8Ukau7AMpRqeNcj8Sdm9M12g/wehbHeCV919/3jzoHimZklAaw/ECen1OcfKlknYyZcVcA9nZ8VPzQp755HKXTeh3Yvqm2AXmcAV8vRPSA725saTuEIpzZ4Slr6aH7njsn9cigFnySMCcBvlOq27IJCexsf5RH+Oam/qc3CIh9rKem7MLJFMbj28FaV3rv95ZGQz2GS6m4V9BQl7eLMFsmeh3p3bhBNKNq8dbS27yVQGxSqKtTYyY2fYstCiYekGvMm3dMl9XdFTGakZGTCUWzjZ6aG5WZfe7QHFbkiMvzSNhqKGloW3hw3PbAqmoDPrWBdreZChdIMsWhtEggDa1aVllamamfl4BYEcG+yVRN/4QftHeF1QtQk4D9d1xfUnll77CyHJ8IH7snoRKcqTK4SEda7ICavB+m/BpRpF3hmG4U+rGXmipFPPeRbAxb5gxtv+OcKeUYw2KKBMRDmHEXRW8O+07Hg1O74buGjrUIR459a6yUzUdjpW5h4JAbo4gUb58E75oMdQPMmda4E5f3JKwQHF2n6eTYNNGik0+Wnae6rMuN5DRX4zZwUI03SbtejeKQTtlseTmBOO2VvkJ2BGYLr76VJ/jsy2trSzdjjOaNzKFLl0K6Qv72gq/umDdjFRGWs4koD6N21zORrkRBcAeiyNXV1JLK9BinxocniUd1i5YiNOYB8mZnZlxPGDm/2,iv:jCuiRfF4LseH2N3pqLVsqUukrOarxH6mHC2IT2i03Hs=,tag:DFUvqD807+bLkhcPufLAdQ==,type:str]
+    mail.private: ENC[AES256_GCM,data:1Cdekc6s4xLt2DJYL0x22E+cUtkg7VT1tsb1/3c8JPu1E22iOZ1kbXcVhLl6lzI73uWxeoJJrrV1UUYSyB8fO+Nr+Omys4vIdiEu2NI6D33PPHrh7e7CnxKwvl/2arCDgVRc5aZhKHbmeZD6/0q0HokeGcyU3b5IgpgvDq6ZQDoLn7VTY3qS9/ZQoRvvfNlME0H14l5lZS5KZpXZyioEfsLx+m4VjxQPNaS9nXrfYt5RDEp6LesheRqEvIvAm/0VXnE0qTvQm1umxZDdYj8DI0fh3i/4ql9gWlIARi5WkP4TrMBPHRJ7Gc2GmA6EiHvoDtamwIBsAQJZxS/jPj+EPvAipoB+uGAXbTXSOhipG9pb83/BL5L3CNb8Nkf40R+lS4PR1MecDKL20cTpvuD1uK1H6elPlyaCFEX19jF+cO5PC4Cfh5gK18/e1IPFfRyDKyHwV0zMTbZp7LXHQTirg64GrnXRmFJvUxQW93uide6XY/hbveGEZP4PGdOPP9eBwhgX7U1oKqphIXhhjMA+gZ8M+hBNuYPKjnUdF56LuKd4bTmD9XuOnuLyPccL6tjInhkI269V5zCRUfLV486tzg9rcbuZrAk+hk+FNNUFDiFS+cA0+Fw5/0vjRv547Ts30a6jHfYpytE/4LzcNhIm3Ls7TGEcN7ke3JNi2g75DKH1GXVCzhfxgO/WGQEB52+EXQDGyGilt9rMH7iQEQt+zweJ7cAbQH7IS6reZs5jd2GTfoIoxJIbIKOTSwuXeCsM76DVcYuiM0WCvRYkgNmEFZmOR2oXVrTbp3LslLufYoVCVDK9zCWVNqVYXf/+SToM+fqh7V/Z6z+wjt3oRpScjS8V6g4DaFTyuNYNR+kyf11hY5+2gWBlXUEArgr05DnX8OzxkQJmPNx2Bk2r4q1LxwfstJYRqpBK9VkA8Ol4r4MpEf5jOORO0/zfRz4EJjQpTOys8SV7nERZHM79SPBQfa80YcbGehZii+oKCqAYBNXiAB7DhQuBglQlmFEdZAMbKfoey8UMwyPRT4aGaU4jm0lpddR9vsQ7IqJXsKftrnfpvQz//t8qQnsvdZhwb9tKvjJv8OSxQ9+QkFBQ9INdsEhYYrjDtO4mMAqBfBPe63QyirqaDV8SSh2rwEpdFxBFXM58dadx6TJ+iAYcEKcrIuVhQT9L9GS28BdtBHT7ohEDtO8OvZMpK940Noq5dndk,iv:vX5bUlhHOiuQk+o8US0NiYLcP/dgSuDGLm8ssKiC7Fg=,tag:w2MQjvtvsyOBXcDfqW0sHg==,type:str]
     mail.txt: |
         mail._domainkey	IN	TXT	( "v=DKIM1; k=rsa; "
         	  "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCx3uC6VoZpICNikgP5Cj9BB2ww/mwX1ZH3t3+qUris1lkzL8Iwdt0c6xV2eSry7t0t2GRM2A9R1lqWNpCXncgNZMQ5VrP5uOZ9tiIMlLpGSb7EgavRGBzB8Vc0aqCoX/HE89qV9qYZNVZw45rNNvbMzi/5YpKDwnQZ1p0uv4hxnQIDAQAB" )  ; ----- DKIM key mail for all-domains-generic-key
 install:
     disks:
         data:
-            device: /dev/nvme1n1
-            min_size_gb: 1887
             model: INTEL SSDPEKKW020T8
             partitions:
                 - fs: btrfs
@@ -18,13 +16,13 @@ install:
                   mount: /var/mail
                   mount_options: compress=zstd,noatime
                   size_gb: 1807
+            size_gb: 1907
         os:
-            device: /dev/nvme0n1
             efi_size_mb: 1024
-            min_size_gb: 456
             model: INTEL SSDPEKKW512G8
             root_fs: btrfs
             root_mount_options: compress=zstd,noatime
+            size_gb: 476
             subvolumes:
                 - mount: /
                   name: '@'
@@ -37,53 +35,53 @@ install:
 installer:
     authorized_keys:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpqEG79KZxF2UYdK14SrXtRBJGcprD7LnGWZYi92hTd fred@atlant.is
-    wifi_key: ENC[AES256_GCM,data:lE3ZhnW/TmyInQ==,iv:uhBsaE6ZMzENsFv0F+UH/MKIA+klV2HMWR5l+Fru1SA=,tag:xuJbG1GCeF+W/s9byvJoxQ==,type:str]
+    wifi_key: ENC[AES256_GCM,data:hD+u7cIDlDF7uQ==,iv:kB0jxM2JU8927SPW4PInoHPs95l3YOHpLg5z1SZWrsg=,tag:X8Je7hbGAbot1VsDBn+1Ag==,type:str]
     wifi_ssid: douze-bis
 ovh:
-    acme_creds: ENC[AES256_GCM,data:DIR93Fo/mKqpGGerOrcnNw9SRQVxzdc3G+lhv+OYh49cvhm7of76eYiGDIcog47qIzlkl9tsXr7vPUO7aw/zP8c3WejuW5k+VN95v1WM2WRBJQdEW6IT+Z3fIlYhCb1frKibHYU/DryQBKWVJM8j1LU0i+vZ4BTNfAZN3M1OIied+dZiLq1Me8jhnV7GY5cIbQqTOwbS2MWAaheG9iQywcQoZQ==,iv:KiPu4Dk34/QAwR3VAAR/ZWmz+LopHh6w4zma9+TE154=,tag:Eb52ehrOl/zVytR40acKVQ==,type:str]
-    dns_creds: ENC[AES256_GCM,data:Pr0+w6Yj6igj7pnwu2aXpUq+MBVWWqoDnpfiVYLGFs2J6atXx2uqBAmtg0ngjqIvIT2lG5TVMLYBGTJ8OquCCuU5sO6VsbzRkJkVIGoT8i9+tRwsCWe2bweM8/dCxVkvsQElXSbEF6G+dF8YmWcg1MLJJWjFnF3Wr2D9qMXK/U6LbIvOa3XHUZ361jnxy/ALRS1qowQcGCZAqTF1uLWXIvfs3w==,iv:W/9LcpJUiI184y+IP4IS4tzrMmtmbaZWfvEu4lStmoQ=,tag:VxSCMLXcV5p9syJDTSfOoQ==,type:str]
-    s3_creds: ENC[AES256_GCM,data:VBhbdDZaL9wOD2zynhqHIXB9aDVkvUVHbfvfs3AZERs15UlegbvsyMJRtBs/A1xw401HVkGcEY0UcZI+lyA06BKB2nfO8+GodG/TIM1JCFwvHVFwdaqSruJw2CfdssJvoWieO8YzfxRmkBeolETyU3p+oHiTutiRFzT0R3D6Vq1Pdz4mb94sgl92Xcg3YgEG7NT3NAYDLNHehCCL,iv:HkWQC6L+s+cy39lZNIL5Y5+lQ96wvzbjlnveeqm6FGY=,tag:P58Ln/dKhp9FUQstv8QCuw==,type:str]
+    acme_creds: ENC[AES256_GCM,data:sCZpJF6Km3fjGSTqx7cLw+ex/eOAPWK9znZRP7v0mHk5PckYfWi9M0Qz2nRDSAibC9F655eTgiYENFLAnBRMrg8mlXZC++FhEZB/2h0uFPxeEee0/JxHKktRES2r+Ds+oQM2FWGUZyApalEX3reVJRJ0hukch0I9hJgGuVzc3W0mVFoluxCOxk6B7xUxwTI5DLNE97DG4AhL17QUoAs2uWSWSw==,iv:FqCkj3aROmUk8OpuRh0iLbw4rBB4LCkI756CvYBdkkM=,tag:VdIyL5zACDBXK94xEf+lbg==,type:str]
+    dns_creds: ENC[AES256_GCM,data:y3UVr6n8kSiWzzg3TXbpawSYujiyww7A/wIzghLxVHbLrW4oDHfYp3Rv7+1meAaqXLCRjQZbV7uHuhZehdOXrv5kcnkSzPekuyscgIOmX7DXM/WTY15EJ5C/yZd0pXQplM9+n0r8d7+3M6ao2THGh/L2KkPh8Eie/KlmgslpOFyL7QwjNJpT/kO3MQCYYhVvf6CYp0lFNL5ufskzwZmbQMeI+Q==,iv:zZMdJYazLnQ9yESW4AVOoV9cM8llpK66fcwRJsBxcJA=,tag:drPc9SgMv+k4SH7mLv08PQ==,type:str]
+    s3_creds: ENC[AES256_GCM,data:9wUZJz6iU5/COEDZCoeUWkvIuddtSMENh/2g6bkLsAjYqXWubUhljSOkHQrAQgNj70jvGDIXX8cbO1pKqc46Tfar/DlvlPf5R0XFqlIFs+fe4F5QPbh7uPKZbjulleZTFqGbbaW//OoPTut692slOzomvB4+X7ZJYT7SbK55KA7AMwMbGUOJM+ajnpA2hnBP0Mb9HZcD/rVPmGTp,iv:K4co1/ZnUpN0JC2NFaXw90Cwdrs4PjZLybE8u0J9H7g=,tag:jpbTVMRQd7pqDArT6cO1tg==,type:str]
 restic:
-    mail_creds: ENC[AES256_GCM,data:VMU33WBXYpsLe6WPskYQaG1GofAIwk351Qa/9hbBY5aLc9Nu8xh18fN0tVUA8Y59gam0I3/EJ+geypJpp6G7OS2XmZGss+EclwVOtImASTFK+BOGm4VbknUc85NouW95eHODr5o9TOIJBPO9k3e5HdNelGXX9vabJjoBzW+9,iv:XmXj+UkczVQjiYseHvd0BfgBxE1mKTroLYZXkWRqhs0=,tag:mgxmCRg/8wGsT/wOtYnKbA==,type:str]
+    mail_creds: ENC[AES256_GCM,data:Hutyi7mwxP+tT4qme3m1l29/F519so1yPwl4rSP3/DYa2GPwu2CzrjHTOM0S9ucg01S6E/QGHkHLAvI+xro3TP5Bv4x44F1j4ZcqauFo0avq5+vSsdDgtglEHCP8Wosyx/YW1bbUhvxKkD6gfIaavCTsbDe4HP686YzP8Q3X,iv:sI4aqraA1mEL/k1qljaOP2B3nN5LyE4/bD1YSTbU33U=,tag:2DK863iJ8wPQBWo9hLv2aA==,type:str]
 system:
     authorized_keys:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpqEG79KZxF2UYdK14SrXtRBJGcprD7LnGWZYi92hTd fred@atlant.is
-    hashed_password: ENC[AES256_GCM,data:bsHszeAsMGbBkmk+tDHkS75fJK7C5fOEuW5nsqa9/lbUDP3zzb82IJMYKhuBpDThUgF7oeNnXO+3jmlqC9M7rV3TzvKX3RBC96aq29Ixnj79BKYjQmHtksCTNZyxZqcHW5vGQ2iFLsqsrQ==,iv:tiF2Tcqc9NE9UpZlgFON4W6lXHCWDgRIQAchUSaCyGM=,tag:2zFCISzn5Ih64+tv3EFBmg==,type:str]
-    wifi_key: ENC[AES256_GCM,data:HbXiEvHMN3M3GV9oMX81mQU9kQ==,iv:o6Bk2MQjnJACl0bQMivRYi8z4A6xavz8iglkBNoT88E=,tag:lr7Zriu8FLudClPZkS8wpQ==,type:str]
+    hashed_password: ENC[AES256_GCM,data:iFD711QSeIVNKKRRdJPDv8Cy0SnA0qavs4uIjeBetp3YqbpbkjdYcnFk4X/O7CmUyPDWxZ1oKGJsIvOJb/W0dgU4Y88T+knap0NVp5H9JF+4B1XZmo7sKnmLlA3H9UJ6otb+t4jQiSf/zw==,iv:XuUESx/RlfY+lWAIfl2/EQ4VXinl3MSSDTAL7gtG3+I=,tag:vBz+BkK18uK5gZJNnrcYbA==,type:str]
+    wifi_key: ENC[AES256_GCM,data:2Z2pCarq4/1f7EXXzbe9UDYaIA==,iv:tcbRAZW/Xza0WXCUbq3u5wJrrqfaJXhy/j96ZvJ1EI0=,tag:FLWv/TLLm8CbYIMxU2VHdQ==,type:str]
     wifi_ssid: douze-bis
 wireguard:
-    host_private_key: ENC[AES256_GCM,data:aV54NqF9cTMQ134w0vOvugCB0EZP9h4L+P3HFDfTFiS2c7JpMgNz7i/PAes=,iv:HuPG5Qd4o0oh01QBhi0EadvyDF4dpkKsLVaRQQ+m2Y8=,tag:Vt388Xu2u6QKrN5Yu+w/Ww==,type:str]
-    laptop_private_key: ENC[AES256_GCM,data:Y2nrlWLAORPSYbND0A7Ob3Y4slu0O/GrYPqNt7Hxrx5S+nD8O4vSKQ9p9PE=,iv:yTAgn0QPirGGjMv0jWaYBeRTwnikxPPQ7T924XCtGxI=,tag:aqKegeMoPzbcGkSjVm95Uw==,type:str]
+    host_private_key: ENC[AES256_GCM,data:fwIqyXp3T1H6Xgsti348sPFPUqw0beVkHnzZeP3MEY01pNzRYy+c42je6IM=,iv:Q/LLTB51WVycMycuWFZV51OqOHFk2xZUUS0kVPQpNzA=,tag:vXhwb+jPX7dHY1uUf3qYig==,type:str]
+    laptop_private_key: ENC[AES256_GCM,data:0rLM0tw2isgdC+h0bzDVNLFZTmztHQkKdvQBz0ETooKI0U+ryzmtBqMA95U=,iv:i0UCrOyEpN448lF7bSAKxpox3Qu/5Yc7iksb/X/rFUY=,tag:z8f72zeCZlWNH4D/TYeXeg==,type:str]
 sops:
     age:
         - recipient: age12u48wxqsn3szg3sr6694m7cvl7xsryawn5jrwyx6f0ffefr4ugps8763ys
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBEV1dvQXlTTGlaRVhlak1z
-            NTR5cmxMZ0s5US9WQ01hSHZyb3JSSzdZYWdrCjdoSG8xWEdmdHZ6UGNiMi9xZ2Q3
-            SDNPM3B2c3Z5SGFLUFErZUduSG00U1UKLS0tIDZoaWRQSUZLMWZIVm1HcVZOUkN4
-            K2tmdWNreGFkQnNNVk0vK2VNTXZsRnMKywPGQsO6+9ODHo/2vf+p9pquWACPUIYr
-            YXwCmXqKQ7G3veq5JhUB2WU9NQJb1AZT4pTm6kaaB+B998+yK+nnRg==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBIdkJWY3RMQ3VaMGk3bVhz
+            Y0Vjcm5XeHEvcFBobHdNYmNMbDVXdUNsZlhNCjNoSzdPakJQWHBzM2F2QzN2S0lP
+            TGR2V3M3NEdhZzNPRFNiQ3BLNmZTZ28KLS0tIGo4UTZ2c04xSnBQbmpJWmZJckhs
+            L2pCM09mMVpyYXJDWUo2MEZlZGpSWncKa9cA3i8GbmuAmylaQSsz6g8L1h69/Fcn
+            h6zHH8tgiyX28dC+gys8Jx54LLhZuikvoMGDWCaCYgvcV7tz1MUpyQ==
             -----END AGE ENCRYPTED FILE-----
         - recipient: age10tw9w9wce66sc4xu8nt9l6kg5222aede5mry7guk3p67ulmat40sljdu7t
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBVWHRXekd2dmZ6ek8zR042
-            WXFlbU45WnhvQUcwSkJjTkcwRml5QTZwVGs4CnpLSXo5NTArNVZPNUVvS3JQcnhU
-            U3lEcDZsREFwYWU4c0NSRU9LL21zZEkKLS0tIDVaYkR4Zlk4dXRxMnVSd3FnS05q
-            YXNxQUZDY1lnR0tlcFJCazlsSTYzaEUKYoGCHer9k+80ycUSrl2Xsx1nlDG8sTAL
-            ZnmyAQg5ufxb9vhcMRwCwYKQ/8N/5r3Gf+/7EB+lFY2a4/0R3qbG9w==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBwckpXYmNOOHJxempxM3NB
+            OHhFTjdlV21keWpiQkNXRmoxNElSRzVuOWx3CkwraGZ4Q3pBNWhKTzhjTm5rNFF1
+            cnBXMTZONXJBMFJJa2hSdWxSSFh2bzQKLS0tIGI1NXpEWDMydmducWtjbFZPdk9P
+            eXpSZURiVWxSelFYb1B3bDlMdnppc1kKxLTWuDvdL+EbMZh5/mh9V2dn50qc19fN
+            xWZqeZL5MOgF0ruT0DvEdl77ru7PPwO2/re/2HS0obqNj6FpK+ts3w==
             -----END AGE ENCRYPTED FILE-----
         - recipient: age1480a4z8vlm5ah8cgjfed0g3mlqlp4wxd2mgvf3ujmnsxzp86l4ss6v6hh6
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB1TFBxYmVhMU92TmRINDFD
-            eHcrTkhJN1dSWGxSWUhXWE9CR3NKYWdDQ0E0CmJ2ZlNBV2o1WjhpMG5KSi82emFE
-            Q2J2YUNrRXpXZUVWZnV3SEZsMmpJWkEKLS0tIGFRdGs2TFpOaFhGM3ZqNTByYVht
-            OTNBNmd4bFNYWXBQb0tQYkp3OER5MnMKorB+mXOei7o2ilW00+onuaQOOjZ4yYFS
-            duxdla3btA7+cf5GqbQhWPrOyvwcvNH6D8/haxvhYDbPtMmFg2iG9A==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBPUzEzL2tqeGJmTlgvL1Iy
+            cVdFS3NyS2ZuR3pac08xM1VKWkJJb3k2Wm1jCnVZbG9wY3Y4S0htMU1ZcVFHQnZZ
+            cytkbG45SEF1KzE0MDhObkxydkQ0amMKLS0tIC8rTm1aZndwSzIrSUtaUmZRbFU4
+            Z3V6cmxaR1JVRWRZTllaMXVoeVNrKzQKrkVGkc9pNugykqrTNIkbZKOP9bD5o4uP
+            z1yYx/KJRJYFcKdjhLpLYqK70VBww1iAxSPM/Br9TIEpD4TncijHyw==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-03-08T18:59:37Z"
-    mac: ENC[AES256_GCM,data:5rA7Spwmp41z00uYuWzhcbjobQGZ8c6hNuuV9D0ED6+eWN66ssePH43R501/0PgYDAXsH7dU0Hp6lDuN+rtHPiIQElIG4VUiNjpEIS0NIm8TYMGZ9wEfjQj7s8Bm/CWCLJc3N2fixqyjMYeVywTzKpqIeBHTOqsqvb7lZPvfTlk=,iv:fAI9OuOUup/wjf43yTvPf37VWUPWbLYCgjNgPSXSwjY=,tag:mgmrd0h5OP8d2PPfAfOt3Q==,type:str]
+    lastmodified: "2026-03-08T19:34:38Z"
+    mac: ENC[AES256_GCM,data:vPY2weYD0WIlw1dIN2AmhHoVXyNnHy9sxe+j+ux2dNPZm9Z3EKDxGzw6OgjqmHuZFbx9sagK7lDvYiAgMBFNS+lv/t8p32riUYk5Ax+/hLqmcX/rWXNWgFutZwUcx3L35plbLsYBjo76jw/K38JPfayGRDfpmHfB+RqoiCw8sD8=,iv:JIjAO8S6SMw2DZn+yOhzK8ScIf6eWMuuyboKveC6aNs=,tag:QMx6DI0Fvleg9p5Ml/byPw==,type:str]
     encrypted_regex: ^(acme_creds|dns_creds|s3_creds|mail_creds|mail\.private|wifi_key|host_private_key|laptop_private_key|hashed_password)$
     version: 3.11.0

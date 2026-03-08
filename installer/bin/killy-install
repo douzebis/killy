@@ -3,12 +3,12 @@
 #
 # Run this from the live installer shell on killy (available on PATH):
 #
-#   install
+#   killy-install
 #
 # What this does:
 #   1. Reads install.disks from /etc/nixos/killy/install-config.yaml.
-#   2. Validates that the expected drives are present (model + minimum size).
-#      Aborts with a clear error if not — no destructive action taken.
+#   2. Finds drives by model (substring) + exact size_gb.
+#      Aborts with a clear error if not found — no destructive action taken.
 #   3. Partitions, formats, and mounts all drives as specified in the YAML.
 #   4. Generates NixOS hardware config.
 #   5. Generates SSH host key, derives host age key.
@@ -20,9 +20,8 @@
 #
 # Abort conditions (no disk writes have occurred):
 #   - install.disks not found in install-config.yaml
-#   - Expected drive device not found
-#   - Drive model does not match (case-insensitive substring)
-#   - Drive smaller than min_size_gb
+#   - No drive matches expected model (substring) + exact size_gb
+#   - Ambiguous match (two drives with same model and size)
 #
 import json
 import os
@@ -92,44 +91,54 @@ def load_config():
 # ---------------------------------------------------------------------------
 
 def get_drives():
+    """Return list of non-USB physical disks with name, size_gb, model."""
     raw = run_capture("lsblk --json --bytes --output NAME,SIZE,MODEL,TYPE,TRAN")
     data = json.loads(raw)
-    return {
-        f"/dev/{d['name']}": d
-        for d in data.get("blockdevices", [])
-        if d.get("type") == "disk"
-    }
+    drives = []
+    for d in data.get("blockdevices", []):
+        if d.get("type") == "disk" and d.get("tran") != "usb":
+            drives.append({
+                "device":   f"/dev/{d['name']}",
+                "model":    (d.get("model") or "").strip(),
+                "size_gb":  int(d["size"]) // 1024**3,
+            })
+    return drives
 
-def validate_drive(spec, drives, label):
-    device = spec["device"]
-    if device not in drives:
-        bail(f"{label} drive {device} not found.\n"
-             f"Available disks: {', '.join(sorted(drives))}")
+def find_drive(spec, drives, label):
+    """Find a drive matching spec by model (substring) and exact size_gb."""
+    expected_model = spec["model"].strip()
+    expected_size  = spec["size_gb"]
 
-    drive = drives[device]
-    size_gb = int(drive["size"]) // 1024**3
-    min_gb  = spec.get("min_size_gb", 0)
-    model   = (drive.get("model") or "").strip()
-    expected_model = spec.get("model", "").strip()
+    matches = [
+        d for d in drives
+        if expected_model.lower() in d["model"].lower()
+        and d["size_gb"] == expected_size
+    ]
 
-    if expected_model and expected_model.lower() not in model.lower():
-        bail(f"{label} drive {device}: model mismatch.\n"
-             f"  Expected (substring): {expected_model!r}\n"
-             f"  Found:                {model!r}")
+    if not matches:
+        available = "\n".join(
+            f"    {d['device']}  {d['size_gb']} GB  {d['model']!r}"
+            for d in drives
+        )
+        bail(f"{label} drive not found.\n"
+             f"  Expected: model contains {expected_model!r}, size={expected_size} GB\n"
+             f"  Available:\n{available}")
 
-    if size_gb < min_gb:
-        bail(f"{label} drive {device}: too small.\n"
-             f"  Expected: >= {min_gb} GB\n"
-             f"  Found:       {size_gb} GB")
+    if len(matches) > 1:
+        bail(f"{label}: ambiguous — multiple drives match model {expected_model!r} "
+             f"size={expected_size} GB:\n"
+             + "\n".join(f"    {d['device']}" for d in matches))
 
-    print(f"  {label}: {device}  model={model!r}  size={size_gb} GB  OK")
+    drive = matches[0]
+    print(f"  {label}: {drive['device']}  model={drive['model']!r}  "
+          f"size={drive['size_gb']} GB  OK")
+    return drive["device"]
 
 # ---------------------------------------------------------------------------
 # Partitioning and mounting
 # ---------------------------------------------------------------------------
 
-def partition_os(spec):
-    dev      = spec["device"]
+def partition_os(dev, spec):
     efi_mb   = spec.get("efi_size_mb", 1024)
     efi_end  = efi_mb + 1  # 1 MiB start + efi_mb
 
@@ -141,15 +150,13 @@ def partition_os(spec):
     run(f"mkfs.fat -F 32 -n BOOT {dev}p1")
     run(f"mkfs.btrfs -f -L nixos {dev}p2")
 
-def create_subvolumes(spec):
-    dev  = spec["device"]
+def create_subvolumes(dev, spec):
     run(f"mount {dev}p2 {MNT}")
     for sv in spec["subvolumes"]:
         run(f"btrfs subvolume create {MNT}/{sv['name']}")
     run(f"umount {MNT}")
 
-def mount_os(spec):
-    dev  = spec["device"]
+def mount_os(dev, spec):
     opts = spec.get("root_mount_options", BTRFS_OPTS)
     svs  = spec["subvolumes"]
 
@@ -170,8 +177,7 @@ def mount_os(spec):
     boot.mkdir(parents=True, exist_ok=True)
     run(f"mount {dev}p1 {boot}")
 
-def partition_data(spec):
-    dev   = spec["device"]
+def partition_data(dev, spec):
     parts = spec["partitions"]
 
     run(f"wipefs -a {dev}")
@@ -182,13 +188,11 @@ def partition_data(spec):
         size_gb = part["size_gb"]
         end_mb  = start_mb + size_gb * 1024
         run(f"parted -s {dev} mkpart primary {start_mb}MiB {end_mb}MiB")
-        fs = part.get("fs", "btrfs")
         label = part["mount"].strip("/").replace("/", "-") or "data"
         run(f"mkfs.btrfs -f -L {label} {dev}p{i+1}")
         start_mb = end_mb
 
-def mount_data(spec):
-    dev   = spec["device"]
+def mount_data(dev, spec):
     parts = spec["partitions"]
     for i, part in enumerate(parts):
         mp   = MNT / part["mount"].lstrip("/")
@@ -295,28 +299,27 @@ def main():
     os_spec   = disks["os"]
     data_spec = disks.get("data")
 
-    step(2, "Validating drives...")
+    step(2, "Finding drives...")
     drives = get_drives()
-    validate_drive(os_spec, drives, "OS")
-    if data_spec:
-        validate_drive(data_spec, drives, "data")
+    os_dev   = find_drive(os_spec, drives, "OS")
+    data_dev = find_drive(data_spec, drives, "data") if data_spec else None
 
-    print("\n  Drive validation passed. Proceeding with installation.")
+    print("\n  Drive identification passed. Proceeding with installation.")
 
-    step(3, f"Partitioning OS drive {os_spec['device']}...")
-    partition_os(os_spec)
+    step(3, f"Partitioning OS drive {os_dev}...")
+    partition_os(os_dev, os_spec)
 
     step(4, "Creating btrfs subvolumes...")
-    create_subvolumes(os_spec)
+    create_subvolumes(os_dev, os_spec)
 
     step(5, "Mounting OS subvolumes...")
-    mount_os(os_spec)
+    mount_os(os_dev, os_spec)
 
     if data_spec:
-        step(6, f"Partitioning data drive {data_spec['device']}...")
-        partition_data(data_spec)
+        step(6, f"Partitioning data drive {data_dev}...")
+        partition_data(data_dev, data_spec)
         step(7, "Mounting data partitions...")
-        mount_data(data_spec)
+        mount_data(data_dev, data_spec)
 
     step(8, "Generating NixOS hardware configuration...")
     run("nixos-generate-config --root /mnt")
