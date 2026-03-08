@@ -1,7 +1,7 @@
 # 0001 — Install key wrapped in Yubikey
 
-- **Status:** draft
-- **Implemented in:** —
+- **Status:** implemented
+- **Implemented in:** 2026-03-08
 
 ---
 

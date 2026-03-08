@@ -160,6 +160,22 @@ sops decrypt killy/install-config.yaml
 sops edit killy/install-config.yaml
 ```
 
+Always run this from the repo root (`~/code/killy`) so that SOPS finds
+`.sops.yaml` and its path regex matches. The file is decrypted to a temp
+file, opened in `$EDITOR`, and re-encrypted on save.
+
+**Non-interactive edits** (e.g. from a script): decrypt, modify, then
+encrypt in-place at the original path — do not encrypt from a `/tmp/` path,
+as the path regex in `.sops.yaml` will not match:
+
+```bash
+sops decrypt killy/install-config.yaml > /tmp/ic.yaml
+# ... modify /tmp/ic.yaml ...
+cp /tmp/ic.yaml killy/install-config.yaml
+sops encrypt --in-place killy/install-config.yaml
+rm /tmp/ic.yaml
+```
+
 ### Decrypt using the Yubikey (install key)
 
 Plug in the Yubikey, then:
@@ -331,39 +347,116 @@ sops decrypt killy/install-config.yaml | head -3
 
 ---
 
-## Installation process overview
+## Installer ISO
 
-> Full detail in `docs/design/killy-install.md`. This is a summary.
+### Building the ISO
 
-### What is not yet implemented
+```bash
+cd ~/code/killy
+nix-shell
+build-iso          # builds .#installer-iso-killy, result -> ./result/
+```
 
-The full autonomous install is a future milestone. The following pieces are
-still to be built:
+`build-iso` is in `bin/` which is on PATH inside the nix-shell.
 
-- `installer/install.bash` — the install script that runs on the live ISO
-- The NixOS installer ISO flake output (`.#installer-iso`)
-- Automated `nixos-install` integration
+### Writing to the Lexar USB drive
 
-### What is already in place
+The Lexar must be attached to the `experiment` VM (see USB passthrough above).
+Confirm the device, then write:
 
-- `killy/install-config.yaml` — all secrets encrypted, three recipients
-- `killy/wrapped-install-key.bin` — install key wrapped in Yubikey serial
-  32283437, slot 0x9d
-- `.sops.yaml` — creation rules with all three recipients registered
-- `scripts/yk-setup.py` / `scripts/yk-unwrap.py` — Yubikey wrap/unwrap scripts
+```bash
+lsblk -o NAME,SIZE,LABEL,VENDOR,TRAN   # confirm sda is the Lexar
+ISO=$(nix --extra-experimental-features "nix-command flakes" \
+      build .#installer-iso-killy --no-link --print-out-paths)
+sudo dd if="$(ls $ISO/iso/*.iso)" of=/dev/sda bs=4M status=progress conv=fsync
+```
 
-### Intended install flow (when complete)
+### Boot sequence
 
-1. Build host: `nix build .#installer-iso` → write ISO to USB key.
-2. Insert USB installer key + Yubikey into killy, power on.
-3. `install.bash` runs automatically:
-   - Loads install key from Yubikey into RAM (PIN prompt at console).
-   - Decrypts secrets bundle.
+1. Insert Lexar USB + ensure Yubikey (serial 17688887) is plugged into killy.
+2. Boot killy from the Lexar.
+3. On boot, automatically:
+   - `yk-unwrap.service` — unwraps the age install key from the Yubikey, writes
+     it to `/run/age-install-key` (mode 0600). Retries every 2 s if the Yubikey
+     is not ready.
+   - `installer-network.service` — decrypts WiFi credentials from
+     `install-config.yaml`, connects to WiFi via `wpa_cli`, waits for DHCP.
+   - `sshd` — starts automatically; the build host SSH key is baked into the
+     ISO, so `ssh nixos@<ip>` works from the build host without a password.
+   - Login shells get `SOPS_AGE_KEY` from `/etc/profile.d/sops-age-key.sh`.
+
+### Connecting via serial console
+
+The FT232 adapter must be attached to the `experiment` VM. Use the helper:
+
+```bash
+bin/killy-serial "some command" [wait_seconds]
+bin/killy-serial -r    # restart the background reader/buffer
+```
+
+The background reader buffers all serial output to `/tmp/killy-buf` and
+persists across calls. Started automatically on first use.
+
+Note: `serial-getty@ttyUSB0` starts at boot if the FT232 is already plugged
+into killy. If not, plug it in after boot and run:
+```bash
+sudo systemctl start serial-getty@ttyUSB0
+```
+
+### Connecting via SSH
+
+Once the installer-network service succeeds, find killy's IP via serial:
+
+```bash
+bin/killy-serial "ip addr show wlo1 | grep 'inet '"
+```
+
+Then SSH from the build host:
+
+```bash
+ssh nixos@192.168.42.xx   # no password needed — build host key is in the ISO
+```
+
+`SOPS_AGE_KEY` is set in the session. You can immediately decrypt secrets:
+
+```bash
+sops decrypt /etc/nixos/killy/install-config.yaml
+```
+
+### Troubleshooting the installer
+
+**yk-unwrap retrying indefinitely:**
+```bash
+journalctl -u yk-unwrap --no-pager -n 20
+```
+Check that pcscd is active and the Yubikey is recognized:
+```bash
+systemctl status pcscd
+ykman list
+```
+
+**installer-network failed:**
+```bash
+journalctl -u installer-network --no-pager -n 20
+wpa_cli -i wlo1 status
+```
+
+**SSH auth failure (password):** SSH with a password is unreliable on the
+installer ISO due to PAM constraints. Use key-based auth — the build host
+SSH key is embedded in the ISO (see `installer/base.nix`).
+
+### Installation process (future)
+
+The full autonomous install script (`installer/install.bash`) is a future
+milestone. When complete:
+
+1. `install.bash` runs from the live ISO:
+   - Decrypts secrets bundle using the age key from `/run/age-install-key`.
    - Partitions NVMe, clones repo, generates `bootstrap.nix`.
    - Derives new host age key, re-encrypts secrets to new host key.
    - Removes install key from SOPS recipients, pushes to repo.
    - Runs `nixos-install`, reboots.
-4. After reboot: `nixos-rebuild switch --flake /etc/nixos#killy`.
-5. Force TLS certificate issuance (hard gate — stops if any cert fails).
-6. Restore mail from Restic backup.
-7. Smoke tests (SMTP, IMAP, HTTPS, DKIM).
+2. After reboot: `nixos-rebuild switch --flake /etc/nixos#killy`.
+3. Force TLS certificate issuance.
+4. Restore mail from Restic backup.
+5. Smoke tests (SMTP, IMAP, HTTPS, DKIM).

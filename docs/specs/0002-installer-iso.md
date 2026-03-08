@@ -1,7 +1,7 @@
 # 0002 — Installer ISO image
 
-- **Status:** draft
-- **Implemented in:** —
+- **Status:** implemented
+- **Implemented in:** 2026-03-08
 
 ---
 
@@ -41,8 +41,6 @@ unwrapped from the Yubikey.
 
 - The full install script (`install.bash`) — later spec.
 - Partitioning, formatting, or writing to the target disk.
-- Network configuration beyond what NixOS provides by default.
-- SSH access (can be added later; not required for this spec).
 - Pre-building the full killy system closure into the ISO (later spec).
 
 ---
@@ -247,19 +245,45 @@ Plugging the Yubikey in while retrying should cause the next attempt to succeed.
 
 ---
 
-## Open questions
+## Implementation notes
 
-1. **`/etc/profile.d` vs `pam_env`**: the `profile.d` approach only works for
-   interactive shells. If future scripts run as non-login processes and need
-   `SOPS_AGE_KEY`, `pam_env` or a systemd `EnvironmentFile` will be needed.
-   For this spec, `profile.d` is sufficient.
+### Deviations from spec
 
-2. **Key file permissions**: `/run/age-install-key` is root-owned (0600). The
-   `nixos` user reads it via the `profile.d` script, which runs as root in the
-   shell initialization? No — `profile.d` runs as the user. The file must be
-   world-readable (0644) or the `nixos` user must be in a group that can read
-   it. Recommend mode 0644 since the key is already derivable by anyone with
-   physical access to the Yubikey + installer image.
+- **WiFi + SSH added**: the installer connects to WiFi automatically and starts
+  sshd, allowing remote access from the build host. Credentials (SSID, PSK) are
+  stored encrypted in `install-config.yaml` under `installer.*` and decrypted
+  by `installer-network.service` after `yk-unwrap.service` completes.
 
-3. **VM testing**: the ISO should be testable in the `experiment` VM before
-   burning to USB, with the Yubikey passed through via libvirt.
+- **`serial-getty@ttyUSB0` auto-start**: the spec proposed a udev rule to start
+  the getty when the device appears. This was replaced by directly adding
+  `serial-getty@ttyUSB0` to `wantedBy = [ "getty.target" ]` in NixOS, because
+  the udev rule only fires on plug events — if the FT232 adapter is already
+  present at boot, the event is missed.
+
+- **`yk-unwrap.service` does not block getty**: the spec had `Before=getty.target`
+  to ensure the age key is available before login. This was removed because it
+  locked the console entirely while waiting for the Yubikey. The key is still
+  available in login shells via `profile.d` once the service completes.
+
+- **Python environment**: `yubikey-manager` is not exposed as a Python package
+  in nixpkgs. The solution is to build a combined environment via
+  `pkgs.yubikey-manager.pythonModule.withPackages (ps: [pkgs.yubikey-manager ps.cryptography])`.
+
+- **`/run/age-install-key` mode 0600**: spec recommended 0644. In practice 0600
+  is safer; the `profile.d` script runs as the user and cannot read it. The
+  installer-network service runs as root and can read it. The build host SSH key
+  is embedded in the ISO so password-based SSH is not required.
+
+- **`yk-unwrap-loop.sh` stderr separation**: stdout and stderr must be redirected
+  separately — stdout captures the age key, stderr the diagnostic messages.
+  Mixing them (with `2>&1`) corrupts the key file.
+
+- **`wpa_cli` for WiFi**: NixOS's `wpa_supplicant-wlo1.service` uses a
+  Nix-store config file that cannot be replaced at runtime. WiFi is configured
+  by calling `wpa_cli add_network / set_network / enable_network` against the
+  running daemon, which then triggers `dhcpcd` automatically on association.
+
+- **`path` / `environment` for systemd services**: use the NixOS
+  `systemd.services.<name>.path` and `environment` attributes rather than
+  embedding store paths in `serviceConfig.Environment`. This is idiomatic and
+  keeps the unit files readable.
