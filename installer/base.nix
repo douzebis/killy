@@ -44,9 +44,12 @@ in {
       "console=tty0"
     ];
 
+    # French keyboard layout on the local (tty0) console
+    console.keyMap = "fr";
+
     systemd.services."serial-getty@ttyUSB0" = {
       enable = true;
-      wantedBy = [ "getty.target" ];
+      wantedBy = [ "multi-user.target" ];
     };
 
     systemd.services."serial-getty@" = {
@@ -131,8 +134,7 @@ in {
       age
       sops
       yubikey-manager
-      python3
-      python3Packages.cryptography
+      (python3.withPackages (ps: [ ps.cryptography ]))
       git
       jq
     ];

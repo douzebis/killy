@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Build the installer ISO for a target host.
+# Usage: ./build-iso [hostname]
+# Default hostname: killy
+set -euo pipefail
+HOST="${1:-killy}"
+exec nix --extra-experimental-features "nix-command flakes" build ".#installer-iso-$HOST" "$@"
