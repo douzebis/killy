@@ -8,7 +8,7 @@
 #
 # What this does:
 #   1. SSHes into the live installer and collects lsblk output.
-#   2. Auto-selects drives: smallest non-USB NVMe = OS, largest = data.
+#   2. Auto-selects drives: smallest non-USB disk = OS, largest = data.
 #   3. Applies default partition layout (see DEFAULTS below).
 #   4. Writes the install: section into killy/install-config.yaml and
 #      re-encrypts it with SOPS.
@@ -163,7 +163,7 @@ def main():
         yaml.dump({"install": install_section}, default_flow_style=False),
         "  "
     ))
-    print("Review and edit install-config.yaml if needed, then run `install` on killy.")
+    print("Review and edit install-config.yaml if needed, then run `killy-install` on killy.")
 
 
 if __name__ == "__main__":
