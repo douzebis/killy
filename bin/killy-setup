@@ -1,41 +1,22 @@
 #!/usr/bin/env python3
-# killy-setup — build-host wizard for populating install.disks in install-config.yaml.
+# killy-setup — auto-populate install.disks in install-config.yaml.
 #
 # Run from the build host (inside nix-shell) while killy is booted on the
 # installer ISO and reachable over SSH:
 #
-#   bin/killy-setup <killy-ip>
+#   bin/killy-setup <killy-installer-ip>
 #
 # What this does:
-#   1. SSHes into the live installer and collects lsblk --json output.
-#   2. Presents the available block devices interactively.
-#   3. Prompts the operator to designate the OS drive and data drive partitions.
-#   4. Writes the install.disks section into killy/install-config.yaml (plaintext —
-#      disk paths and models are not secrets).
+#   1. SSHes into the live installer and collects lsblk output.
+#   2. Auto-selects drives: smallest non-USB NVMe = OS, largest = data.
+#   3. Applies default partition layout (see DEFAULTS below).
+#   4. Writes the install: section into killy/install-config.yaml and
+#      re-encrypts it with SOPS.
+#   5. Prints the proposed section for operator review.
+#      Edit install-config.yaml manually if the proposal needs adjustment.
 #
-# The generated section looks like:
-#
-#   install:
-#       disks:
-#           os:
-#               device: /dev/nvme0n1
-#               model: INTEL SSDPEKKW512G8
-#               min_size_gb: 400
-#               efi_size_mb: 1024
-#               root_fs: btrfs
-#               root_mount_options: compress=zstd,noatime
-#               subvolumes:
-#                   - {name: "@",     mount: /}
-#                   - {name: "@nix",  mount: /nix}
-#                   - {name: "@home", mount: /home}
-#                   - {name: "@log",  mount: /var/log}
-#           data:
-#               device: /dev/nvme1n1
-#               model: INTEL SSDPEKKW020T8
-#               min_size_gb: 1500
-#               partitions:
-#                   - {mount: /srv,      size_gb: 100,  fs: btrfs, mount_options: compress=zstd,noatime}
-#                   - {mount: /var/mail, size_gb: 1760, fs: btrfs, mount_options: compress=zstd,noatime}
+# No interactive prompts — the proposal is written unconditionally. Review
+# the output and edit the YAML if needed before running `install` on killy.
 #
 import json
 import math
@@ -46,90 +27,50 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT   = Path(__file__).parent.parent
 CONFIG_PATH = REPO_ROOT / "killy" / "install-config.yaml"
 
-DEFAULT_EFI_SIZE_MB    = 1024
-DEFAULT_ROOT_FS        = "btrfs"
-DEFAULT_ROOT_OPTS      = "compress=zstd,noatime"
-DEFAULT_DATA_FS        = "btrfs"
-DEFAULT_DATA_OPTS      = "compress=zstd,noatime"
-DEFAULT_SUBVOLUMES     = [
+# ---------------------------------------------------------------------------
+# Defaults applied to all hosts. Edit install-config.yaml after running this
+# wizard if you need a different layout.
+# ---------------------------------------------------------------------------
+
+EFI_SIZE_MB   = 1024
+ROOT_FS       = "btrfs"
+ROOT_OPTS     = "compress=zstd,noatime"
+DATA_FS       = "btrfs"
+DATA_OPTS     = "compress=zstd,noatime"
+SUBVOLUMES    = [
     {"name": "@",     "mount": "/"},
     {"name": "@nix",  "mount": "/nix"},
     {"name": "@home", "mount": "/home"},
     {"name": "@log",  "mount": "/var/log"},
 ]
-DEFAULT_DATA_PARTITIONS = [
-    {"mount": "/srv",      "fs": DEFAULT_DATA_FS, "mount_options": DEFAULT_DATA_OPTS},
-    {"mount": "/var/mail", "fs": DEFAULT_DATA_FS, "mount_options": DEFAULT_DATA_OPTS},
-]
+SRV_SIZE_GB   = 100   # /srv gets 100 GiB; /var/mail gets the remainder
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def gb(size_bytes):
     return math.floor(size_bytes / 1024**3)
 
-def ask(prompt, default=None):
-    suffix = f" [{default}]" if default is not None else ""
-    while True:
-        val = input(f"{prompt}{suffix}: ").strip()
-        if val == "" and default is not None:
-            return default
-        if val:
-            return val
-
-def ask_int(prompt, default=None):
-    while True:
-        raw = ask(prompt, default)
-        try:
-            return int(raw)
-        except ValueError:
-            print(f"  Please enter an integer.")
-
-def print_drives(drives):
-    print()
-    print(f"  {'#':<3} {'Device':<15} {'Size (GB)':>10}  Model")
-    print(f"  {'-'*3} {'-'*15} {'-'*10}  {'-'*30}")
-    for i, d in enumerate(drives):
-        size = gb(d["size"])
-        model = d.get("model") or "(no model)"
-        print(f"  {i:<3} {d['name']:<15} {size:>10}  {model}")
-    print()
-
-def pick_drive(drives, label):
-    while True:
-        idx = ask_int(f"Select {label} drive (number)")
-        if 0 <= idx < len(drives):
-            return drives[idx]
-        print(f"  Invalid selection — enter 0 to {len(drives)-1}.")
-
-# ---------------------------------------------------------------------------
-# SSH helpers
-# ---------------------------------------------------------------------------
 
 def ssh_run(host, cmd):
     result = subprocess.run(
         ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
          f"nixos@{host}", cmd],
-        capture_output=True, text=True
+        capture_output=True, text=True,
     )
     if result.returncode != 0:
-        print(f"SSH error:\n{result.stderr}", file=sys.stderr)
+        print(f"SSH error: {result.stderr}", file=sys.stderr)
         sys.exit(1)
     return result.stdout
 
-# ---------------------------------------------------------------------------
-# SOPS-aware config update
-# ---------------------------------------------------------------------------
 
 def update_config(install_section):
-    """Decrypt install-config.yaml, set install: key, re-encrypt."""
+    """Decrypt install-config.yaml, set install: key, re-encrypt in place."""
+    # Decrypt
     result = subprocess.run(
         ["sops", "decrypt", str(CONFIG_PATH)],
-        capture_output=True, text=True
+        capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"sops decrypt failed:\n{result.stderr}", file=sys.stderr)
@@ -138,21 +79,18 @@ def update_config(install_section):
     config = yaml.safe_load(result.stdout)
     config["install"] = install_section
 
+    # Write plaintext to path matching .sops.yaml path_regex, then encrypt.
     plaintext = yaml.dump(config, default_flow_style=False, allow_unicode=True)
-    # Write to the config path (matches .sops.yaml path_regex) then encrypt.
     CONFIG_PATH.write_text(plaintext)
+
     result = subprocess.run(
         ["sops", "encrypt", "--in-place", str(CONFIG_PATH)],
-        capture_output=True, text=True
+        capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"sops encrypt failed:\n{result.stderr}", file=sys.stderr)
         sys.exit(1)
-    print(f"\nWritten to {CONFIG_PATH}")
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main():
     if len(sys.argv) < 2:
@@ -160,125 +98,77 @@ def main():
         sys.exit(1)
 
     host = sys.argv[1]
+    print(f"\nkilly-setup — connecting to nixos@{host} ...")
 
-    print(f"\nkilly-setup — connecting to nixos@{host}...")
+    # Collect block device info from the live installer.
+    raw   = ssh_run(host, "lsblk --json --bytes --output NAME,SIZE,MODEL,TYPE,TRAN")
+    data  = json.loads(raw)
 
-    raw = ssh_run(host, "lsblk --json --bytes --output NAME,SIZE,MODEL,TYPE,TRAN")
-    data = json.loads(raw)
-
-    # Filter to physical disks only (type == "disk"), exclude the installer USB
-    # (tran == "usb") and loop devices.
-    all_devices = data.get("blockdevices", [])
+    # Physical non-USB disks only.
     drives = [
-        d for d in all_devices
+        d for d in data.get("blockdevices", [])
         if d.get("type") == "disk" and d.get("tran") != "usb"
     ]
-    drives.sort(key=lambda d: d["name"])
+    drives.sort(key=lambda d: d["size"])   # ascending by size
 
-    if not drives:
-        print("No suitable drives found (no non-USB disks).", file=sys.stderr)
+    if len(drives) < 1:
+        print("No non-USB disks found.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\nFound {len(drives)} non-USB disk(s) on {host}:")
-    print_drives(drives)
+    print(f"\nFound {len(drives)} non-USB disk(s):")
+    print(f"  {'Device':<15} {'Size (GB)':>10}  Model")
+    print(f"  {'-'*15} {'-'*10}  {'-'*30}")
+    for d in drives:
+        print(f"  {'/dev/'+d['name']:<15} {gb(d['size']):>10}  {(d.get('model') or '').strip()}")
 
-    # --- OS drive ---
-    print("=== OS drive (will hold NixOS root, btrfs subvolumes) ===")
-    os_drive = pick_drive(drives, "OS")
-    os_size  = gb(os_drive["size"])
-    os_min   = ask_int(f"  Minimum acceptable size for OS drive (GB)", default=max(100, os_size - 10))
-    efi_mb   = ask_int(f"  EFI partition size (MB)", default=DEFAULT_EFI_SIZE_MB)
+    # Auto-select: smallest = OS, largest = data (if more than one).
+    os_drive   = drives[0]
+    data_drive = drives[-1] if len(drives) > 1 else None
 
-    print(f"\n  Default btrfs subvolumes:")
-    for sv in DEFAULT_SUBVOLUMES:
-        print(f"    {sv['name']:<10} → {sv['mount']}")
-    use_default_sv = ask("  Use default subvolumes?", default="yes").lower().startswith("y")
-    if use_default_sv:
-        subvolumes = DEFAULT_SUBVOLUMES
-    else:
-        print("  Enter subvolumes as 'name:mount' pairs, one per line. Empty line to finish.")
-        subvolumes = []
-        while True:
-            entry = input("    name:mount > ").strip()
-            if not entry:
-                break
-            if ":" not in entry:
-                print("    Format: name:mount (e.g. @:/)")
-                continue
-            name, mount = entry.split(":", 1)
-            subvolumes.append({"name": name.strip(), "mount": mount.strip()})
+    os_size_gb   = gb(os_drive["size"])
+    os_min_gb    = max(100, os_size_gb - 20)
+    os_model     = (os_drive.get("model") or "").strip()
 
-    # --- Data drive ---
-    remaining = [d for d in drives if d["name"] != os_drive["name"]]
-    if not remaining:
-        print("\nOnly one drive found — no data drive available.")
-        data_section = None
-    else:
-        print(f"\n=== Data drive (will hold /srv, /var/mail, etc.) ===")
-        data_drive = pick_drive(remaining, "data")
-        data_size  = gb(data_drive["size"])
-        data_min   = ask_int(f"  Minimum acceptable size for data drive (GB)", default=max(100, data_size - 10))
+    os_section = {
+        "device":             f"/dev/{os_drive['name']}",
+        "model":              os_model,
+        "min_size_gb":        os_min_gb,
+        "efi_size_mb":        EFI_SIZE_MB,
+        "root_fs":            ROOT_FS,
+        "root_mount_options": ROOT_OPTS,
+        "subvolumes":         SUBVOLUMES,
+    }
 
-        print(f"\n  Data drive is {data_size} GB. Define partitions (explicit sizes, must sum to ≤ {data_size} GB).")
-        print(f"  Default layout:")
-        defaults = [
-            {"mount": "/srv",      "size_gb": 100,             "fs": DEFAULT_DATA_FS, "mount_options": DEFAULT_DATA_OPTS},
-            {"mount": "/var/mail", "size_gb": data_size - 100, "fs": DEFAULT_DATA_FS, "mount_options": DEFAULT_DATA_OPTS},
-        ]
-        for p in defaults:
-            print(f"    {p['mount']:<15} {p['size_gb']} GB")
-        use_default_parts = ask("  Use default partition layout?", default="yes").lower().startswith("y")
+    install_section: dict = {"disks": {"os": os_section}}
 
-        if use_default_parts:
-            partitions = defaults
-        else:
-            partitions = []
-            total = 0
-            print("  Enter partitions. Empty mount point to finish.")
-            while True:
-                mount = ask("    Mount point (e.g. /srv)").strip()
-                if not mount:
-                    break
-                size = ask_int(f"    Size for {mount} (GB)")
-                fs   = ask(f"    Filesystem for {mount}", default=DEFAULT_DATA_FS)
-                opts = ask(f"    Mount options for {mount}", default=DEFAULT_DATA_OPTS)
-                partitions.append({"mount": mount, "size_gb": size, "fs": fs, "mount_options": opts})
-                total += size
-                print(f"    ({total} GB allocated so far, {data_size - total} GB remaining)")
+    if data_drive:
+        data_size_gb  = gb(data_drive["size"])
+        data_min_gb   = max(100, data_size_gb - 20)
+        data_model    = (data_drive.get("model") or "").strip()
+        mail_size_gb  = data_size_gb - SRV_SIZE_GB
 
         data_section = {
             "device":      f"/dev/{data_drive['name']}",
-            "model":       (data_drive.get("model") or "").strip(),
-            "min_size_gb": data_min,
-            "partitions":  partitions,
+            "model":       data_model,
+            "min_size_gb": data_min_gb,
+            "partitions": [
+                {"mount": "/srv",      "size_gb": SRV_SIZE_GB,   "fs": DATA_FS, "mount_options": DATA_OPTS},
+                {"mount": "/var/mail", "size_gb": mail_size_gb,  "fs": DATA_FS, "mount_options": DATA_OPTS},
+            ],
         }
-
-    # --- Assemble ---
-    os_section = {
-        "device":            f"/dev/{os_drive['name']}",
-        "model":             (os_drive.get("model") or "").strip(),
-        "min_size_gb":       os_min,
-        "efi_size_mb":       efi_mb,
-        "root_fs":           DEFAULT_ROOT_FS,
-        "root_mount_options": DEFAULT_ROOT_OPTS,
-        "subvolumes":        subvolumes,
-    }
-
-    install_section = {"disks": {"os": os_section}}
-    if data_section:
         install_section["disks"]["data"] = data_section
 
-    # --- Preview ---
-    print("\n=== install section to write ===")
-    print(textwrap.indent(yaml.dump({"install": install_section}, default_flow_style=False), "  "))
-
-    confirm = ask("Write to install-config.yaml?", default="yes")
-    if not confirm.lower().startswith("y"):
-        print("Aborted — nothing written.")
-        sys.exit(0)
-
+    # Write and re-encrypt.
     update_config(install_section)
-    print("Done.")
+
+    # Print proposal for operator review.
+    print(f"\nProposal written to {CONFIG_PATH}:")
+    print(textwrap.indent(
+        yaml.dump({"install": install_section}, default_flow_style=False),
+        "  "
+    ))
+    print("Review and edit install-config.yaml if needed, then run `install` on killy.")
+
 
 if __name__ == "__main__":
     main()
