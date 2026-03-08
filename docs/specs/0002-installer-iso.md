@@ -170,16 +170,24 @@ The NixOS installer image already sets this up; the custom ISO inherits it.
 
 ### Repo contents on the ISO
 
-The scripts and secrets bundle must be accessible at runtime. Two options:
+The ISO is fully self-contained — no network access to the build host is
+required at install time. All files needed by `nixos-install` and `killy-install`
+are embedded via `environment.etc`:
 
-- **Option A** (simpler): embed the repo checkout in the ISO at a fixed path
-  (e.g. `/etc/nixos/`) using `environment.etc` or a NixOS path option.
-- **Option B**: clone from GitHub at boot time (requires network).
+| Path on ISO | Source |
+|---|---|
+| `/etc/nixos/flake.nix` | `flake.nix` (repo root) |
+| `/etc/nixos/flake.lock` | `flake.lock` (repo root) |
+| `/etc/nixos/.sops.yaml` | `.sops.yaml` (repo root) |
+| `/etc/nixos/scripts/yk-unwrap.py` | `scripts/yk-unwrap.py` |
+| `/etc/nixos/killy/wrapped-install-key.bin` | `killy/wrapped-install-key.bin` |
+| `/etc/nixos/killy/install-config.yaml` | `killy/install-config.yaml` |
+| `/etc/nixos/killy/system/{default,base,wireguard,virt}.nix` | `killy/system/` |
+| `/etc/nixos/installer/` | `installer/` (scripts + killy-install) |
 
-Option A is preferred: it keeps the ISO self-contained and avoids network
-dependency. Only the files needed for this spec are included:
-`scripts/yk-unwrap.py`, `killy/wrapped-install-key.bin`, `.sops.yaml`,
-`killy/install-config.yaml`.
+`hardware-configuration.nix` is intentionally absent — it is generated fresh
+by `nixos-generate-config --root /mnt` during each install and placed into
+`killy/system/` before `nixos-install` runs.
 
 ### Packages
 

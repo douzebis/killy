@@ -557,6 +557,7 @@ sudo killy-install
 
 The script validates that the physical drives match the spec in
 `install-config.yaml`, then proceeds headlessly:
+- Finds drives by PCI slot + exact model + size (no device path assumptions)
 - Partitions and formats both NVMe drives
 - Creates btrfs subvolumes
 - Generates `hardware-configuration.nix` and the SSH host key
