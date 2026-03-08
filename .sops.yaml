@@ -1,6 +1,6 @@
 creation_rules:
   - path_regex: killy/install-config\.yaml$
-    encrypted_regex: ^(acme_creds|s3_creds|mail_creds|mail\.private)$
+    encrypted_regex: ^(acme_creds|s3_creds|mail_creds|mail\.private|wifi_key)$
     age:
       # killy host key (derived from SSH host ed25519 key via ssh-to-age)
       # — replaced on each reinstall via `sops updatekeys`

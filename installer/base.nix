@@ -97,6 +97,11 @@ in {
       mode = "0755";
     };
 
+    environment.etc."nixos/installer/installer-network.sh" = {
+      source = ./installer-network.sh;
+      mode = "0755";
+    };
+
     systemd.services.yk-unwrap = {
       description = "Unwrap age install key from Yubikey";
       after = [ "pcscd.service" ];
@@ -107,6 +112,25 @@ in {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = "/etc/nixos/installer/yk-unwrap-loop.sh";
+        Environment = "HOSTNAME=${cfg.hostname}";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+      };
+    };
+
+    # -------------------------------------------------------------------------
+    # Network configuration service (WiFi via SOPS credentials)
+    # -------------------------------------------------------------------------
+
+    systemd.services.installer-network = {
+      description = "Configure installer WiFi from SOPS credentials";
+      after = [ "yk-unwrap.service" "wpa_supplicant.service" ];
+      requires = [ "yk-unwrap.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "/etc/nixos/installer/installer-network.sh";
         Environment = "HOSTNAME=${cfg.hostname}";
         StandardOutput = "journal+console";
         StandardError = "journal+console";
@@ -125,6 +149,24 @@ in {
       '';
       mode = "0644";
     };
+
+    # -------------------------------------------------------------------------
+    # SSH server — accessible with empty password for nixos user
+    # -------------------------------------------------------------------------
+
+    services.openssh = {
+      enable = true;
+      settings = {
+        PermitEmptyPasswords = true;
+        PermitRootLogin = "no";
+      };
+    };
+
+    # -------------------------------------------------------------------------
+    # WiFi — wpa_supplicant managed by installer-network.service
+    # -------------------------------------------------------------------------
+
+    networking.wireless.enable = true;
 
     # -------------------------------------------------------------------------
     # Packages

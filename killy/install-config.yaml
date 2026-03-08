@@ -1,34 +1,37 @@
 ovh:
-    acme_creds: ENC[AES256_GCM,data:j4nlfdh05o11Rmb2Su8CZ7+aQvRsrq89QB/ar3W1jlu7l7K9qPNWDnq06z/aEvduzrNtYAQSwIw+ohiHLBeV2FAH6db+fX9u9TTBjZ8pklovaW20bVQPKE6YtKHEUTQCmhrPv0rHPT6xj9Oov6WYP5Ahx7mpUICmg3aSb8ubq9hYQqdL6vWiOKeqX9MQx5f2cbI1RTlyO820LQpuVxd4pNGsgA==,iv:6hiWAdtDLdQcZVXw6kgsDHYqQUIfLCf1r+x8kXhohQk=,tag:f47Y4YCQUfMCntX4TNCsUg==,type:str]
-    s3_creds: ENC[AES256_GCM,data:g0ojO24HDMphk2nxH25H1g8aBrcQMduW9A6mWz1HIbzg7Gr6uIMlD5/W/2v2ioHwoz6G7nDrDqBL9oxtfY/pV/tmtYuU3SmTcmSD5n2Btco6mHAY8yjQMkPomvZKnRihxSnzKmVd9LPlHIpVzqjwdBP7vVIeYDrVJA38wPHKiDq7uwY4irl+l984rNnsox1ghrqCS2WGm2L2FSmU,iv:F0RbDioxzTgbeofHKgPx3e/beX0EikEK9izvxQHmfB4=,tag:fLuYQlY5eDeAMT7By0Vduw==,type:str]
+    acme_creds: ENC[AES256_GCM,data:LGiR6loqdUVK+ZwkVqVx3KpOnTJ9st0comzB1syZxLwuqanfjU3V/5Llgc+oLCMWbQkMyebfAbSFWlAuDEucnP4XLmlDxWajsuMK4ehQPd8+oKe/H6mvgWdO+L34XwwNzumMe8p5YPA3a9o3BqkUS2Wu6H2fYBdug0YwDMX/aDORQWFuBH9jTXT4c8Bp1atNXsZePWIh63KU4vKOuxyG25TVpw==,iv:Xthfa/RlXTihY5wdNn5opzjvteyf9MPg493ZsDa7Dwg=,tag:S7MZzrT36RM5oQDckbXZQA==,type:str]
+    s3_creds: ENC[AES256_GCM,data:4EEC6pI/OVvXjVTJFdL8P6tfsUjZ5P0SEBPWEWMlaQkQdzRmXdb/sCzJpeiGwZzK+pMBKGlwzITsTz4LYW4iTUsPUv2u9+ur6kT0F08cJYlfLk0B5t6xttWb3vCk0vR7TFQ53f2HWHqe7he0I6THQazeaqXwH6lHi7QIrBFDDNAcl1pnsjp9sB2Yh4Ijjx9b+31GWLGbNLkOElBR,iv:PKaJwzDRw3obKVhp+XFyEqvTGQNEnjoWe7fQfGxOmn8=,tag:GVidww8ZcehZX9dUOKBvKg==,type:str]
 restic:
-    mail_creds: ENC[AES256_GCM,data:tYrFo4hkur0d19xvqoMlPg9Kwzi5YTixA0DDsAbXwuEGYhE1mAeQFq3bc1MAbdP/vRDfT+aZ3KyI5hgBGlrzH95sqcZmqmTPktSpavenBk9xKKSB3prkmXeff50abHqlNHHw0aSQ6jpcsLELIWTNXTRQ7xgwb800Zq5b7oel,iv:yTstDrSKD4JQTDx2wplryC+HwjoZStXOzdX8SMHDAQ4=,tag:DW2BHe7vqSRAfflUy+l2Uw==,type:str]
+    mail_creds: ENC[AES256_GCM,data:isQ7zoGwxP3ZK+NJiNoNUOkUhdEfoUi/woEFT3k6sjzoVkX2vEFysYLek74bRZ1xZFn6QOzHjzk/8/L3tEbzaqBtaRgbWtCe/2NLQRH84Rg0WIlLhwnzzejcnD8eRUAGsYYQ1o0CmjEOc3sTG0BNpavkd1ZV+mBei+1uKFEs,iv:rZiuH2EMe6cV5R5TDnpyduuwPgccMMsi17nKfT7JPdA=,tag:VDfC/TmpzeIa+Xgv8uqxhw==,type:str]
 dkim:
-    mail.private: ENC[AES256_GCM,data:Hjfvlp3ykmlNNtyJYkQjgT7AWrqZWLLpjnhZVcKSTZb82Yk7YOVJnOHcqstu3r8b9mY25NV17F5FYFsXwRjmYzMcboAU9+JeRWx+LJLu3bJ6xNR7hLOX7nwyheiBJfzTYZIYwOzJUxDvE63AG8/ZfQjWCF7tzKLnKw/lO7OKOdgtHueYDPJJE6ghTuB0pH/HnLaFpuXgCE614NAu668Ck7VmXwvg4vHxhcptBWA1jzJG3o70ZqOV2xTNkJ85gS0ybcEUGzOafOwPMt+VmPtdcj0BOxBsUKJMSGFvvuw4ADEa2fsP/98Kv4ub7Std8ihbYKVnETyAM53RgvSJvnGaELNsjKmGXQbINPWochuWaMFNTJlnhCIfDwAf0zaAdSN2GlB65KS9gJnhaO29bLpO8KaGsod0fxgj8ZegqpiwUvs03cKwDpwjvExD9n/ETdJEqnXccPZ535XeiE+PNLoDsTqznCnZF+sj+Tk61acISfL5aOee1kFryigyr22dI1x449sTgn0gsbxvvh2C+WMyYq8xEhhTssyYtW2s0bBrBv6OJ36f047rjbPD+SEgdlC3DZcMGqNmuYOsrcd5iR00cCyZUvr7rHFoGmt+blZ8yTvhBTVSqnxQDwS40B+8EdscmWzuEjUL8pGA0nAm3tGdpL/c7GS3ZlqXgIGRY3Ln3zMssHqkk3/mMTMgJKgQOr7VqeVxIE8LKjJ9IQIZlWqC8zJWloTPupCC2DaIe919wgQ7MCOmizwEShLBLon6otW2bwCPtPQ2cdkbM4lMflMxLAJa5kXP6BbcsYvgigXoOuegMMXLXbMET8Aa4uswKTriTpWZsprJ2MkoZDcc153SLrQUS2gFRtqL/H3ElVWri35qj9Jc38Kxb1zDS7ptcEZgsq1GnTy/nyQo4C/qnXF8aciBiWvOY600ltH4ijcVwJBz1qJNp6BAKVNWepOF9gnF4pTRLesApt1pUgyybkYT9MrwrmZsuEuPM8wlJ6ysjlZVvSSmJ/3c68/xr6nmuSeQulWYowSyKFp3gmaTWLR7WNVMNHrvXxAwryiNnmAEH4Fhe7W/+wsI0hlOtpFWL3XuxEPGCqv1fKntMAkEFzYrnM1ZTRk87xKaLaw11Iss8BqQXJgmXvxd3NYr1PDrRxPoOItLLXfECgyLHnCAsqjMoFtnBQVJh0YWuQxR9wyZ1KDU3JdC30f7jtwWz/s87rzs,iv:FTXGC3cLjQ/EWZ8utyqqG0ooTUnuUgZYZPluEdU7Jdc=,tag:hhZfOme1Sn0CJABk/9OP2w==,type:str]
+    mail.private: ENC[AES256_GCM,data:VJ73hlaeqTp5jqtq0FU3F9YZ/W5y3cJnL83ZdmtSuqQl+7lf7DxbFP0OajH61fI0NaW2U7fX4D9L45bQ5vddnxfCKJHELNWVGNmm/6oFPL9tvBtXqNLLeLBJ+GB2YUYD7jYNnvCDiaKr4d0YKbiNDaUapvG8NtQy4CeBeEpVu7IbCelFjQW3mbPAnrc1NrFLyLlWwil8MMTLZDt8VEGN5TNXz+pop2A5VoLu5JHxXFMyb/b4/zQALWZX9uwQKDVSTANJvwivZ0hN5LPEmhiVgKObKcX42JcZw9cQUbZoKCKHREz8/TQ2U7ktXoVw51s70VD9MJgn3MXrBFnuYA1Jo6bSvuxr1m2T/tGXpxEBaRH8uoDXVb+ZQu1qcL1A+8MTzTmnHtCdpCX4OjJEBgNqaBjBnT75Ww8/wM6tsJMJwCnD0Wm9DHdK4Hcv3dUDL0zVNPQEV2SwMaybH8rdFNul42OQXaUipYhhQqPORaEAunPKs2HpoW7r4sO973vXW8BThVDr0Z1SAqqpkgYmo31MKDt4YuWTEDOBbem97iqmzBmTiJ3op8QTddNwgjhX89rp10lOU4ZmnXsVu9jEazFWN8lTy8UWHIYV56I0XasToStbktzTfgKCqwETtvTpgJdUkBYZvhRYfhg+ZQrGpqAuixVUR8ck5Uz18UHw+K01u8GLRSPEXNEFSqNxHkaUO1vn8Rn3/73g/q75HwuOupVtNUlUeet0lE/znRjtLEOoBDzYrf1wsDs2pqCNnJutpUIlQ5IieFoZArOI1y2uKX0maRmP3Sy4oFzLotxljBxU38+ffLOOp9aFLXefBV//nGJ+hz3M5Z5e2cXPX4IatpycxE3Iig14uiiOFR8KNQZ3Jpcg579xSYiKeNHrHtAJ5VhnfwNdHgKa8RWGvPRR/MFXrgiGPBDlDJI28yZmSKlKZWvVLl8KDtiItmX6BIxhKYvLUEV7cRs7u5J6iG8yhOxik6oBtdtuwuYc5mKNxieVnQ4x3xpyEA6m9fiFl827UAY2nRLEXnWwVKGWSH3Z03xHqBAVID8Z8TumfXgGvLHY8GFruh9KwMF+bR/syfaEDzYSVxXLp7KleAxNt6R7z137tgFw/EXgMu3wCEoqZvHKdLrzDHtnaI/W6bAd14BOhx2zP40w3/CoOTgg0B7WDma9AISlB1FH2TPHfLy3xe8BD600d+54Xbl+CA7H2JFB8hh5,iv:GdhRAt9/6cfWm5vQE6pNJbMHmkDUh4n+Nc0ESmTv02w=,tag:6Kg4vfNr3TWJovbIZe74Lg==,type:str]
     mail.txt: |
         mail._domainkey	IN	TXT	( "v=DKIM1; k=rsa; "
         	  "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCx3uC6VoZpICNikgP5Cj9BB2ww/mwX1ZH3t3+qUris1lkzL8Iwdt0c6xV2eSry7t0t2GRM2A9R1lqWNpCXncgNZMQ5VrP5uOZ9tiIMlLpGSb7EgavRGBzB8Vc0aqCoX/HE89qV9qYZNVZw45rNNvbMzi/5YpKDwnQZ1p0uv4hxnQIDAQAB" )  ; ----- DKIM key mail for all-domains-generic-key
+installer:
+    wifi_ssid: douze-bis
+    wifi_key: ENC[AES256_GCM,data:QGInuVILpGHOxA==,iv:XGXHmOqpv+ePvMr9huOkwAMolCB21P6ynoQV7TIqYPU=,tag:DpgIGYCM2LTMYx7EJVJrew==,type:str]
 sops:
     age:
         - recipient: age10tw9w9wce66sc4xu8nt9l6kg5222aede5mry7guk3p67ulmat40sljdu7t
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBPaEZmeGtZOUlBd055YXVB
-            SFRlMTZZajZ3ckZ2YlZILzBqdHFnTzN6OEZrCngrZHc3bUtrcDZsL09CNjk3SjZD
-            YmRuSVI2MlJ6ejMwZzJDc3hwWmlMbkEKLS0tIE5ERXVXZ0Y4Q0NkeVQvbnlET09l
-            dzI2b2h0ZVFZWDZCMjZscWhPM1EvclkK4UFCb8N2xkCR+NKM82aH6n39oFCr3+zO
-            LwmN94Sa63vkHTnVTAaQh6V2zYsaj3Idt1z+dCu3Eff5OWdEeJWSWg==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB1Vkwra05kWDh3VklQMk44
+            ZWlNWHFmSkM4THdsN0FvWDdrWVIrMGhwbkZBCmRDWGpNcEsvNSticGRxOFFkcCtL
+            cllDek1GRjFWeEdOYUF1dmdWWis1MlUKLS0tIGIxMGRtTXY4ajNBbGZTT0RZUFVD
+            UVlpd1lmNmhUNFYveHErK1pSUytQYW8KQxaQq7mmay5oxOn81wRM40rAQ+knSv1F
+            29S7MYIia0iWbOmN/+Pp2pCPrBZERfz23wet4A20+PWdpLCf2bISEA==
             -----END AGE ENCRYPTED FILE-----
         - recipient: age1480a4z8vlm5ah8cgjfed0g3mlqlp4wxd2mgvf3ujmnsxzp86l4ss6v6hh6
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBQUnFkOHJTRnlUMUFkbTNP
-            M0lKN1lhWmdYclRLcURveHlSZ0twbnFtRmhvCjY4QnNpMnBwMHM2ZzBFQUthcEZ1
-            TXJRamRsbW1rVXBTNDFQTG9heFlRSG8KLS0tIElqbDZCYnBtMDlBRUhpQ1IwdGFv
-            a2R0dUswY3ZXcGZxYVptZHFnZEtiSlUK8RHGZX2r/klhqu4oZpjHgFt81vq4zfyO
-            328HnMhOIpm1bz7HxFWfkHjGTzjbzugOgf/KeRH14kFpd5gxR/Lahg==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBIMWwyQWMza2VQTzQwY2Vr
+            ZEsvaWVOLzg0YXo4dURJU2RNUndXZmhCQWl3ClpWZEc0VHhZRk10ajc0R1RxVzg1
+            UUFiTHRIUittaVZ1QTBKMFdhQmNsdjgKLS0tIGV0bTFGWjErb0dOMU95QlZIQkNF
+            WmNjRWtWcFpSZE91eDhQQlB0V0M4U2sKFqEUDdZjALGumdeBTLuR8lpjKsAWs3a6
+            oy+abQRNuqB0Bdhvflbad88LLfDYL4TzK/7cAClr45dHEp1Esys3YQ==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-03-07T13:12:15Z"
-    mac: ENC[AES256_GCM,data:cWkntBS5nKpzFv4uYtFTHdUl4Yrh/ssoziS7LiR78ws4eut9YRq7YRlVQoZh2g/1KbeHoycV+VgNuyp8Pv/iYKiWDRe3PbJeE3oEyLZ6+Bsw8tabAEV12THTnmr0hNRfWlM9VFOeKi74fa4nV/rxAS92rmthmq6GYb0FrEWjpbM=,iv:Ii8mJeDLkMHOGie50gQF6ngIg12DmVYCaF1ullJMw4U=,tag:JtPIQJBK4hKp41azYRDhyA==,type:str]
-    encrypted_regex: ^(acme_creds|s3_creds|mail_creds|mail\.private)$
+    lastmodified: "2026-03-08T00:24:26Z"
+    mac: ENC[AES256_GCM,data:ejlYGEwiS0jKhzc7o2VVyA3KDSM4fpmWA899OJK1TGDF1oeynJNmDaT7LwdQvLHv3XDXArVnejSkIwEYa2wmCZ/19+jUhtr8nKjEZztS4ns0dQQT1e25eHv6QQp2wwdOB3Ke+DJZAzJLe6FthXWmrm2cMIHEC96Hb6FjasdD+1w=,iv:Fe96tZqQJ/3jZLWV54/VndGdLqOZVeebRoXR1Y+cWFY=,tag:EbdOfUn3r+RMY7ohixCP6g==,type:str]
+    encrypted_regex: ^(acme_creds|s3_creds|mail_creds|mail\.private|wifi_key)$
     version: 3.11.0
