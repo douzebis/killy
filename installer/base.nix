@@ -28,6 +28,11 @@ in {
       type = lib.types.path;
       description = "Path to yk-unwrap.py.";
     };
+    wifiInterface = lib.mkOption {
+      type = lib.types.str;
+      default = "wlo1";
+      description = "WiFi interface name (e.g. wlo1, wlan0).";
+    };
   };
 
   imports = [
@@ -47,10 +52,10 @@ in {
     # French keyboard layout on the local (tty0) console
     console.keyMap = "fr";
 
-    systemd.services."serial-getty@ttyUSB0" = {
-      enable = true;
-      wantedBy = [ "multi-user.target" ];
-    };
+    # Start serial getty when ttyUSB0 appears (udev-triggered)
+    services.udev.extraRules = ''
+      SUBSYSTEM=="tty", KERNEL=="ttyUSB0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="serial-getty@ttyUSB0.service"
+    '';
 
     systemd.services."serial-getty@" = {
       serviceConfig.ExecStart = lib.mkForce
@@ -64,7 +69,8 @@ in {
     users.users.nixos = {
       isNormalUser = true;
       extraGroups = [ "wheel" ];
-      initialHashedPassword = "";
+      # Password is "nixos" — installer ISO only, no security concern
+      initialHashedPassword = "$6$stTOKx2z7fSzTz1W$NW6bAn6DCnxUzfnejeSvKuNoHNIOF7IigRurDfymuOhGjR1uQTN6e9dfjoC79lTguV19Y03B187A0HMY60HgW1";
     };
 
     security.sudo.wheelNeedsPassword = false;
@@ -111,7 +117,7 @@ in {
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "/etc/nixos/installer/yk-unwrap-loop.sh";
+        ExecStart = "${pkgs.bash}/bin/bash /etc/nixos/installer/yk-unwrap-loop.sh";
         Environment = "HOSTNAME=${cfg.hostname}";
         StandardOutput = "journal+console";
         StandardError = "journal+console";
@@ -130,8 +136,8 @@ in {
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "/etc/nixos/installer/installer-network.sh";
-        Environment = "HOSTNAME=${cfg.hostname}";
+        ExecStart = "${pkgs.bash}/bin/bash /etc/nixos/installer/installer-network.sh";
+        Environment = [ "HOSTNAME=${cfg.hostname}" "WIFI_INTERFACE=${cfg.wifiInterface}" ];
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
@@ -166,7 +172,10 @@ in {
     # WiFi — wpa_supplicant managed by installer-network.service
     # -------------------------------------------------------------------------
 
-    networking.wireless.enable = true;
+    networking.wireless = {
+      enable = true;
+      interfaces = [ cfg.wifiInterface ];
+    };
 
     # -------------------------------------------------------------------------
     # Packages
@@ -176,7 +185,7 @@ in {
       age
       sops
       yubikey-manager
-      (python3.withPackages (ps: [ ps.cryptography ]))
+      (python3.withPackages (ps: [ ps.cryptography ps.yubikey-manager ]))
       git
       jq
     ];

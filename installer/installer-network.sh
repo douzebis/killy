@@ -7,6 +7,7 @@
 set -euo pipefail
 
 HOSTNAME="${HOSTNAME:?HOSTNAME must be set}"
+WIFI_INTERFACE="${WIFI_INTERFACE:-wlo1}"
 CONFIG=/etc/nixos/${HOSTNAME}/install-config.yaml
 AGE_KEY_FILE=/run/age-install-key
 
@@ -21,7 +22,7 @@ echo "installer-network: configuring WiFi for SSID: ${WIFI_SSID}"
 wpa_passphrase "$WIFI_SSID" "$WIFI_KEY" > /run/wpa_supplicant.conf
 chmod 600 /run/wpa_supplicant.conf
 
-systemctl restart wpa_supplicant
+systemctl restart "wpa_supplicant-${WIFI_INTERFACE}.service"
 echo "installer-network: WiFi configured, waiting for association..."
 
 # Wait up to 30s for an IP address
