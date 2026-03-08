@@ -7,7 +7,7 @@
 #
 # What this does:
 #   1. Reads install.disks from /etc/nixos/killy/install-config.yaml.
-#   2. Finds drives by model (substring) + exact size_gb.
+#   2. Finds drives by PCI slot (primary key), verifies model and size_gb exactly.
 #      Aborts with a clear error if not found — no destructive action taken.
 #   3. Partitions, formats, and mounts all drives as specified in the YAML.
 #   4. Generates NixOS hardware config.
@@ -20,8 +20,8 @@
 #
 # Abort conditions (no disk writes have occurred):
 #   - install.disks not found in install-config.yaml
-#   - No drive matches expected model (substring) + exact size_gb
-#   - Ambiguous match (two drives with same model and size)
+#   - No drive found at the expected PCI slot (drive moved — re-run killy-setup)
+#   - Model or size_gb does not match exactly
 #
 import json
 import os
@@ -90,48 +90,78 @@ def load_config():
 # Drive validation
 # ---------------------------------------------------------------------------
 
+def get_pci_slot(name):
+    """Return the PCI slot address for a block device (e.g. '0000:01:00.0').
+
+    Reads the sysfs symlink for /sys/block/<name>, which points through the
+    PCI device tree. Walks up the path components looking for a PCI address
+    of the form DDDD:BB:DD.F. Returns empty string if not found.
+    """
+    import re as _re
+    try:
+        target = os.readlink(f"/sys/block/{name}")
+        for part in target.split("/"):
+            if _re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]", part):
+                return part
+    except OSError:
+        pass
+    return ""
+
 def get_drives():
-    """Return list of non-USB physical disks with name, size_gb, model."""
+    """Return list of non-USB physical disks with device, model, size_gb, pci_slot."""
     raw = run_capture("lsblk --json --bytes --output NAME,SIZE,MODEL,TYPE,TRAN")
     data = json.loads(raw)
     drives = []
     for d in data.get("blockdevices", []):
         if d.get("type") == "disk" and d.get("tran") != "usb":
+            name = d["name"]
             drives.append({
-                "device":   f"/dev/{d['name']}",
+                "device":   f"/dev/{name}",
                 "model":    (d.get("model") or "").strip(),
                 "size_gb":  int(d["size"]) // 1024**3,
+                "pci_slot": get_pci_slot(name),
             })
     return drives
 
 def find_drive(spec, drives, label):
-    """Find a drive matching spec by model (substring) and exact size_gb."""
+    """Find a drive by pci_slot (primary key), then verify model and size_gb exactly.
+
+    Aborts with a clear message if:
+    - no drive has the expected PCI slot
+    - model or size_gb do not match exactly
+    """
+    expected_slot  = spec["pci_slot"].strip()
     expected_model = spec["model"].strip()
     expected_size  = spec["size_gb"]
 
-    matches = [
-        d for d in drives
-        if expected_model.lower() in d["model"].lower()
-        and d["size_gb"] == expected_size
-    ]
-
-    if not matches:
+    # Find by PCI slot (primary key).
+    slot_matches = [d for d in drives if d["pci_slot"] == expected_slot]
+    if not slot_matches:
         available = "\n".join(
-            f"    {d['device']}  {d['size_gb']} GB  {d['model']!r}"
+            f"    {d['device']}  pci={d['pci_slot']}  {d['size_gb']} GB  {d['model']!r}"
             for d in drives
         )
-        bail(f"{label} drive not found.\n"
-             f"  Expected: model contains {expected_model!r}, size={expected_size} GB\n"
-             f"  Available:\n{available}")
+        bail(f"{label}: no drive found at PCI slot {expected_slot!r}.\n"
+             f"  The drive may have been moved to a different slot.\n"
+             f"  Re-run bin/killy-setup to refresh the disk spec.\n"
+             f"  Available drives:\n{available}")
 
-    if len(matches) > 1:
-        bail(f"{label}: ambiguous — multiple drives match model {expected_model!r} "
-             f"size={expected_size} GB:\n"
-             + "\n".join(f"    {d['device']}" for d in matches))
+    drive = slot_matches[0]
 
-    drive = matches[0]
-    print(f"  {label}: {drive['device']}  model={drive['model']!r}  "
-          f"size={drive['size_gb']} GB  OK")
+    # Verify model exactly.
+    if drive["model"] != expected_model:
+        bail(f"{label}: drive at {expected_slot} has unexpected model.\n"
+             f"  Expected: {expected_model!r}\n"
+             f"  Found:    {drive['model']!r}")
+
+    # Verify size exactly.
+    if drive["size_gb"] != expected_size:
+        bail(f"{label}: drive at {expected_slot} has unexpected size.\n"
+             f"  Expected: {expected_size} GB\n"
+             f"  Found:    {drive['size_gb']} GB")
+
+    print(f"  {label}: {drive['device']}  pci={drive['pci_slot']}  "
+          f"model={drive['model']!r}  size={drive['size_gb']} GB  OK")
     return drive["device"]
 
 # ---------------------------------------------------------------------------

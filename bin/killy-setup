@@ -64,6 +64,20 @@ def ssh_run(host, cmd):
         sys.exit(1)
     return result.stdout
 
+def get_pci_slots(host, names):
+    """Return {name: pci_slot} for each block device name, via sysfs on host."""
+    import re
+    result = {}
+    for name in names:
+        out = ssh_run(host, f"readlink /sys/block/{name} 2>/dev/null || true").strip()
+        pci = ""
+        for part in out.split("/"):
+            if re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]", part):
+                pci = part
+                break
+        result[name] = pci
+    return result
+
 
 def update_config(install_section):
     """Decrypt install-config.yaml, set install: key, re-encrypt in place."""
@@ -125,10 +139,20 @@ def main():
     os_drive   = drives[0]
     data_drive = drives[-1] if len(drives) > 1 else None
 
-    os_size_gb   = gb(os_drive["size"])
-    os_model     = (os_drive.get("model") or "").strip()
+    # Fetch PCI slot for each selected drive.
+    names_to_resolve = [os_drive["name"]]
+    if data_drive:
+        names_to_resolve.append(data_drive["name"])
+    pci_slots = get_pci_slots(host, names_to_resolve)
+
+    os_size_gb = gb(os_drive["size"])
+    os_model   = (os_drive.get("model") or "").strip()
+    os_pci     = pci_slots.get(os_drive["name"], "")
+    if not os_pci:
+        print(f"WARNING: could not determine PCI slot for {os_drive['name']}", file=sys.stderr)
 
     os_section = {
+        "pci_slot":           os_pci,
         "model":              os_model,
         "size_gb":            os_size_gb,
         "efi_size_mb":        EFI_SIZE_MB,
@@ -140,13 +164,17 @@ def main():
     install_section: dict = {"disks": {"os": os_section}}
 
     if data_drive:
-        data_size_gb  = gb(data_drive["size"])
-        data_model    = (data_drive.get("model") or "").strip()
-        mail_size_gb  = data_size_gb - SRV_SIZE_GB
+        data_size_gb = gb(data_drive["size"])
+        data_model   = (data_drive.get("model") or "").strip()
+        data_pci     = pci_slots.get(data_drive["name"], "")
+        mail_size_gb = data_size_gb - SRV_SIZE_GB
+        if not data_pci:
+            print(f"WARNING: could not determine PCI slot for {data_drive['name']}", file=sys.stderr)
 
         data_section = {
-            "model":    data_model,
-            "size_gb":  data_size_gb,
+            "pci_slot":  data_pci,
+            "model":     data_model,
+            "size_gb":   data_size_gb,
             "partitions": [
                 {"mount": "/srv",      "size_gb": SRV_SIZE_GB,   "fs": DATA_FS, "mount_options": DATA_OPTS},
                 {"mount": "/var/mail", "size_gb": mail_size_gb,  "fs": DATA_FS, "mount_options": DATA_OPTS},
