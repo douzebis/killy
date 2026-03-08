@@ -20,15 +20,28 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs }: let
+  outputs = { self, nixpkgs, sops-nix }: let
     system = "x86_64-linux";
   in {
     # Build-host dev shell — provides age, sops, ykman, python3, ruff, etc.
     # Enter with:  cd ~/code/killy && nix-shell
     devShells.${system}.default =
       import ./default.nix { pkgs = nixpkgs.legacyPackages.${system}; };
+
+    # Installed host OS configuration for killy.
+    # Deploy with: nixos-rebuild switch --flake .#killy \
+    #   --target-host fred@<killy-ip> --use-remote-sudo
+    nixosConfigurations.killy = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        ./killy/system/default.nix
+        sops-nix.nixosModules.sops
+      ];
+    };
 
     # Full NixOS configuration for the killy installer ISO.
     # This is an intermediate object; the actual ISO derivation is extracted

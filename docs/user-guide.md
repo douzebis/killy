@@ -347,6 +347,79 @@ sops decrypt killy/install-config.yaml | head -3
 
 ---
 
+## WireGuard keys
+
+### Overview
+
+Two WireGuard peers are pre-provisioned:
+
+| Peer | WireGuard address | Private key location |
+|---|---|---|
+| killy host | `10.10.0.1` | `install-config.yaml` → `wireguard.host_private_key` (encrypted) |
+| operator laptop | `10.10.0.2` | `install-config.yaml` → `wireguard.laptop_private_key` (encrypted) |
+
+Public keys are stored in plaintext in `killy/system/wireguard.nix` (host)
+and in the laptop's WireGuard config (see §"Laptop WireGuard config" below).
+
+### Generating new keys (one-time, or on rotation)
+
+```bash
+cd ~/code/killy
+nix-shell
+# Generate host key pair
+wg genkey | tee /tmp/wg-host.key | wg pubkey > /tmp/wg-host.pub
+# Generate laptop key pair
+wg genkey | tee /tmp/wg-laptop.key | wg pubkey > /tmp/wg-laptop.pub
+
+cat /tmp/wg-host.pub    # → paste into killy/system/wireguard.nix as hosts's publicKey
+cat /tmp/wg-laptop.pub  # → paste into killy/system/wireguard.nix as laptop peer's publicKey
+```
+
+Store the private keys in `install-config.yaml`:
+
+```bash
+sops decrypt killy/install-config.yaml > /tmp/ic.yaml
+# Edit /tmp/ic.yaml: add or update the wireguard block:
+#   wireguard:
+#       host_private_key: <content of /tmp/wg-host.key>
+#       laptop_private_key: <content of /tmp/wg-laptop.key>
+cp /tmp/ic.yaml killy/install-config.yaml
+sops encrypt --in-place killy/install-config.yaml
+rm /tmp/ic.yaml /tmp/wg-host.key /tmp/wg-laptop.key /tmp/wg-host.pub /tmp/wg-laptop.pub
+```
+
+The `encrypted_regex` in `.sops.yaml` covers `host_private_key` and
+`laptop_private_key` — both are encrypted at rest.
+
+**Current public keys** (generated 2026-03-08):
+
+| Peer | Public key |
+|---|---|
+| killy host | `cymg6tTmwttS1JgypXaTWWsHwa9le7dkQo4axiu77Ec=` |
+| operator laptop | `wHD2oVuTC58x9xjZqDfl95RiuPGk31nRSaBjo7+Hjnw=` |
+
+### Laptop WireGuard config
+
+Once the killy host is installed and running, configure WireGuard on the
+operator laptop (`/etc/wireguard/wg0.conf` or equivalent):
+
+```ini
+[Interface]
+PrivateKey = <laptop_private_key from install-config.yaml>
+Address = 10.10.0.2/24
+
+[Peer]
+PublicKey = cymg6tTmwttS1JgypXaTWWsHwa9le7dkQo4axiu77Ec=
+Endpoint = 2001:41d0:fc28:400:edd:24ff:fe75:3dca:51820
+AllowedIPs = 10.10.0.0/24
+PersistentKeepalive = 25
+```
+
+On NixOS, place this in `networking.wireguard.interfaces.wg0` (see
+spec 0007 for the full module).
+
+---
+
 ## Installer ISO
 
 ### Building the ISO
@@ -383,7 +456,7 @@ sudo dd if="$(ls $ISO/iso/*.iso)" of=/dev/sda bs=4M status=progress conv=fsync
      `install-config.yaml`, connects to WiFi via `wpa_cli`, waits for DHCP.
    - `sshd` — starts automatically; the build host SSH key is baked into the
      ISO, so `ssh nixos@<ip>` works from the build host without a password.
-   - Login shells get `SOPS_AGE_KEY` from `/etc/profile.d/sops-age-key.sh`.
+   - Login shells get `SOPS_AGE_KEY` exported automatically (via `loginShellInit` in `installer/base.nix`).
 
 ### Connecting via serial console
 
@@ -445,18 +518,82 @@ wpa_cli -i wlo1 status
 installer ISO due to PAM constraints. Use key-based auth — the build host
 SSH key is embedded in the ISO (see `installer/base.nix`).
 
-### Installation process (future)
+### Installation procedure (spec 0005)
 
-The full autonomous install script (`installer/install.bash`) is a future
-milestone. When complete:
+#### Prerequisites
 
-1. `install.bash` runs from the live ISO:
-   - Decrypts secrets bundle using the age key from `/run/age-install-key`.
-   - Partitions NVMe, clones repo, generates `bootstrap.nix`.
-   - Derives new host age key, re-encrypts secrets to new host key.
-   - Removes install key from SOPS recipients, pushes to repo.
-   - Runs `nixos-install`, reboots.
-2. After reboot: `nixos-rebuild switch --flake /etc/nixos#killy`.
-3. Force TLS certificate issuance.
-4. Restore mail from Restic backup.
-5. Smoke tests (SMTP, IMAP, HTTPS, DKIM).
+- VT-x and VT-d enabled in BIOS (enter setup with Delete key at boot).
+- Static DHCP lease for killy's WiFi MAC `0c:dd:24:75:3d:ca` configured
+  on the router — assigned `192.168.42.44`.
+- Yubikey (serial 17688887) plugged into killy.
+- Lexar USB flashed with the latest ISO and booted (see above).
+- SSH accessible from the build host (`ssh nixos@192.168.42.44`).
+
+#### Step 1 — Populate the disk spec (first install only)
+
+Run the setup wizard from the build host. It SSHes into the installer,
+enumerates the drives, and populates `install.disks` in `install-config.yaml`:
+
+```bash
+cd ~/code/killy
+nix-shell
+bin/killy-setup 192.168.42.44
+```
+
+Follow the prompts to select the OS drive (`nvme0n1`) and data drive
+(`nvme1n1`). The wizard writes and re-encrypts `install-config.yaml`
+automatically. Skip this step on reinstalls if the disk configuration is
+unchanged.
+
+#### Step 2 — Run the installer
+
+SSH into the live installer and type `install`:
+
+```bash
+ssh nixos@192.168.42.44
+install
+```
+
+The script validates that the physical drives match the spec in
+`install-config.yaml`, then proceeds headlessly:
+- Partitions and formats both NVMe drives
+- Creates btrfs subvolumes
+- Generates `hardware-configuration.nix` and the SSH host key
+- Derives the host age key, updates `.sops.yaml`, runs `sops updatekeys`
+- Copies the repo to `/mnt/etc/nixos`
+- Runs `nixos-install --flake /mnt/etc/nixos#killy`
+- Reboots
+
+#### Step 3 — After reboot
+
+The system boots into the installed NixOS. SSH in as `fred`:
+
+```bash
+ssh-keygen -R 192.168.42.44
+ssh fred@192.168.42.44
+```
+
+#### Step 4 — Commit post-install artifacts
+
+Copy the generated hardware config and updated secrets back to the repo:
+
+```bash
+cd ~/code/killy
+scp fred@192.168.42.44:/etc/nixos/killy/system/hardware-configuration.nix \
+    killy/system/hardware-configuration.nix
+scp fred@192.168.42.44:/etc/nixos/killy/install-config.yaml \
+    killy/install-config.yaml
+scp fred@192.168.42.44:/etc/nixos/.sops.yaml .sops.yaml
+git add killy/system/hardware-configuration.nix killy/install-config.yaml .sops.yaml
+git commit -m "killy: post-install — hardware-configuration, updated host age key"
+```
+
+#### Step 5 — Deploy config changes
+
+For subsequent NixOS config changes, deploy from the build host over LAN
+(or WireGuard once established):
+
+```bash
+nixos-rebuild switch --flake .#killy \
+  --target-host fred@192.168.42.44 --use-remote-sudo
+```

@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+# install — headless NixOS installer for killy.
+#
+# Run this from the live installer shell on killy (available on PATH):
+#
+#   install
+#
+# What this does:
+#   1. Reads install.disks from /etc/nixos/killy/install-config.yaml.
+#   2. Validates that the expected drives are present (model + minimum size).
+#      Aborts with a clear error if not — no destructive action taken.
+#   3. Partitions, formats, and mounts all drives as specified in the YAML.
+#   4. Generates NixOS hardware config.
+#   5. Generates SSH host key, derives host age key.
+#   6. Updates .sops.yaml (overlay) and re-encrypts install-config.yaml
+#      for the new host key using the install key (SOPS_AGE_KEY).
+#   7. Copies repo to /mnt/etc/nixos (killy-relevant files only).
+#   8. Runs nixos-install --flake /mnt/etc/nixos#killy.
+#   9. Unmounts and reboots.
+#
+# Abort conditions (no disk writes have occurred):
+#   - install.disks not found in install-config.yaml
+#   - Expected drive device not found
+#   - Drive model does not match (case-insensitive substring)
+#   - Drive smaller than min_size_gb
+#
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+CONFIG_PATH   = Path("/etc/nixos/killy/install-config.yaml")
+SOPS_YAML     = Path("/etc/nixos/.sops.yaml")
+MNT           = Path("/mnt")
+BTRFS_OPTS    = "compress=zstd,noatime"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def run(cmd, check=True, **kwargs):
+    """Run a shell command, streaming output. Raises on failure if check=True."""
+    print(f"  + {cmd}")
+    result = subprocess.run(cmd, shell=True, **kwargs)
+    if check and result.returncode != 0:
+        bail(f"Command failed (exit {result.returncode}): {cmd}")
+    return result
+
+def run_capture(cmd):
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        bail(f"Command failed: {cmd}\n{result.stderr}")
+    return result.stdout.strip()
+
+def bail(msg):
+    print(f"\nABORT: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+def step(n, msg):
+    print(f"\n[{n}] {msg}")
+
+# ---------------------------------------------------------------------------
+# SOPS decrypt
+# ---------------------------------------------------------------------------
+
+def load_config():
+    age_key = os.environ.get("SOPS_AGE_KEY", "").strip()
+    if not age_key and Path("/run/age-install-key").exists():
+        age_key = Path("/run/age-install-key").read_text().strip()
+    if not age_key:
+        bail("SOPS_AGE_KEY is not set and /run/age-install-key is missing.\n"
+             "Ensure yk-unwrap.service has completed successfully.")
+
+    env = os.environ.copy()
+    env["SOPS_AGE_KEY"] = age_key
+
+    result = subprocess.run(
+        ["sops", "decrypt", str(CONFIG_PATH)],
+        capture_output=True, text=True, env=env
+    )
+    if result.returncode != 0:
+        bail(f"Failed to decrypt {CONFIG_PATH}:\n{result.stderr}")
+
+    import yaml
+    return yaml.safe_load(result.stdout), age_key
+
+# ---------------------------------------------------------------------------
+# Drive validation
+# ---------------------------------------------------------------------------
+
+def get_drives():
+    raw = run_capture("lsblk --json --bytes --output NAME,SIZE,MODEL,TYPE,TRAN")
+    data = json.loads(raw)
+    return {
+        f"/dev/{d['name']}": d
+        for d in data.get("blockdevices", [])
+        if d.get("type") == "disk"
+    }
+
+def validate_drive(spec, drives, label):
+    device = spec["device"]
+    if device not in drives:
+        bail(f"{label} drive {device} not found.\n"
+             f"Available disks: {', '.join(sorted(drives))}")
+
+    drive = drives[device]
+    size_gb = int(drive["size"]) // 1024**3
+    min_gb  = spec.get("min_size_gb", 0)
+    model   = (drive.get("model") or "").strip()
+    expected_model = spec.get("model", "").strip()
+
+    if expected_model and expected_model.lower() not in model.lower():
+        bail(f"{label} drive {device}: model mismatch.\n"
+             f"  Expected (substring): {expected_model!r}\n"
+             f"  Found:                {model!r}")
+
+    if size_gb < min_gb:
+        bail(f"{label} drive {device}: too small.\n"
+             f"  Expected: >= {min_gb} GB\n"
+             f"  Found:       {size_gb} GB")
+
+    print(f"  {label}: {device}  model={model!r}  size={size_gb} GB  OK")
+
+# ---------------------------------------------------------------------------
+# Partitioning and mounting
+# ---------------------------------------------------------------------------
+
+def partition_os(spec):
+    dev      = spec["device"]
+    efi_mb   = spec.get("efi_size_mb", 1024)
+    efi_end  = efi_mb + 1  # 1 MiB start + efi_mb
+
+    run(f"wipefs -a {dev}")
+    run(f"parted -s {dev} mklabel gpt")
+    run(f"parted -s {dev} mkpart ESP fat32 1MiB {efi_end}MiB")
+    run(f"parted -s {dev} set 1 esp on")
+    run(f"parted -s {dev} mkpart primary {efi_end}MiB 100%")
+    run(f"mkfs.fat -F 32 -n BOOT {dev}p1")
+    run(f"mkfs.btrfs -f -L nixos {dev}p2")
+
+def create_subvolumes(spec):
+    dev  = spec["device"]
+    run(f"mount {dev}p2 {MNT}")
+    for sv in spec["subvolumes"]:
+        run(f"btrfs subvolume create {MNT}/{sv['name']}")
+    run(f"umount {MNT}")
+
+def mount_os(spec):
+    dev  = spec["device"]
+    opts = spec.get("root_mount_options", BTRFS_OPTS)
+    svs  = spec["subvolumes"]
+
+    # Mount root subvolume first (mount: /)
+    root_sv = next(sv for sv in svs if sv["mount"] == "/")
+    run(f"mount -o {opts},subvol={root_sv['name']} {dev}p2 {MNT}")
+
+    # Mount remaining subvolumes
+    for sv in svs:
+        if sv["mount"] == "/":
+            continue
+        mp = MNT / sv["mount"].lstrip("/")
+        mp.mkdir(parents=True, exist_ok=True)
+        run(f"mount -o {opts},subvol={sv['name']} {dev}p2 {mp}")
+
+    # EFI
+    boot = MNT / "boot"
+    boot.mkdir(parents=True, exist_ok=True)
+    run(f"mount {dev}p1 {boot}")
+
+def partition_data(spec):
+    dev   = spec["device"]
+    parts = spec["partitions"]
+
+    run(f"wipefs -a {dev}")
+    run(f"parted -s {dev} mklabel gpt")
+
+    start_mb = 1
+    for i, part in enumerate(parts):
+        size_gb = part["size_gb"]
+        end_mb  = start_mb + size_gb * 1024
+        run(f"parted -s {dev} mkpart primary {start_mb}MiB {end_mb}MiB")
+        fs = part.get("fs", "btrfs")
+        label = part["mount"].strip("/").replace("/", "-") or "data"
+        run(f"mkfs.btrfs -f -L {label} {dev}p{i+1}")
+        start_mb = end_mb
+
+def mount_data(spec):
+    dev   = spec["device"]
+    parts = spec["partitions"]
+    for i, part in enumerate(parts):
+        mp   = MNT / part["mount"].lstrip("/")
+        opts = part.get("mount_options", BTRFS_OPTS)
+        mp.mkdir(parents=True, exist_ok=True)
+        run(f"mount -o {opts} {dev}p{i+1} {mp}")
+
+# ---------------------------------------------------------------------------
+# Host age key + sops updatekeys
+# ---------------------------------------------------------------------------
+
+def setup_host_age_key(age_key):
+    host_age_pub = run_capture(
+        "nix-shell -I nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos "
+        "-p ssh-to-age --run 'ssh-to-age -i /mnt/etc/ssh/ssh_host_ed25519_key.pub'"
+    )
+    print(f"\n  Host age public key: {host_age_pub}")
+    print("  (Record this — update .sops.yaml on the build host after install)")
+
+    # Update .sops.yaml in the overlay: replace the old host key recipient.
+    sops_text = SOPS_YAML.read_text()
+    sops_text = re.sub(
+        r'(# killy host key[^\n]*\n(?:\s*#[^\n]*\n)*\s*)- age1\S+',
+        lambda m: m.group(1) + "- " + host_age_pub,
+        sops_text
+    )
+    SOPS_YAML.write_text(sops_text)
+
+    # Re-encrypt install-config.yaml for the new host key.
+    env = os.environ.copy()
+    env["SOPS_AGE_KEY"] = age_key
+    result = subprocess.run(
+        ["sops", "updatekeys", "--yes", str(CONFIG_PATH)],
+        env=env
+    )
+    if result.returncode != 0:
+        bail("sops updatekeys failed")
+
+    return host_age_pub
+
+# ---------------------------------------------------------------------------
+# Copy repo to /mnt
+# ---------------------------------------------------------------------------
+
+def copy_repo():
+    dest = MNT / "etc" / "nixos"
+    dest.mkdir(parents=True, exist_ok=True)
+    src = Path("/etc/nixos")
+
+    for d in ["bin", "installer", "killy", "lib", "scripts"]:
+        if (src / d).exists():
+            run(f"cp -r {src / d} {dest / d}")
+
+    for f in ["flake.nix", "flake.lock", "default.nix", "shell.nix", "ruff.toml"]:
+        if (src / f).exists():
+            run(f"cp {src / f} {dest / f}")
+
+    # .sops.yaml is a dotfile — handle explicitly
+    run(f"cp {src / '.sops.yaml'} {dest / '.sops.yaml'}")
+
+    # Copy freshly generated hardware-configuration.nix into system dir
+    hw_src = dest / "hardware-configuration.nix"
+    hw_dst = dest / "killy" / "system" / "hardware-configuration.nix"
+    if hw_src.exists():
+        run(f"cp {hw_src} {hw_dst}")
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    if os.geteuid() != 0:
+        bail("This script must be run as root (use sudo).")
+
+    print("=" * 50)
+    print("  killy NixOS installer")
+    print("=" * 50)
+
+    step(1, "Loading and decrypting install-config.yaml...")
+    config, age_key = load_config()
+
+    install = config.get("install")
+    if not install:
+        bail("No 'install' section found in install-config.yaml.\n"
+             "Run bin/killy-setup on the build host first.")
+
+    disks = install.get("disks")
+    if not disks or "os" not in disks:
+        bail("install.disks.os not found in install-config.yaml.\n"
+             "Run bin/killy-setup on the build host first.")
+
+    os_spec   = disks["os"]
+    data_spec = disks.get("data")
+
+    step(2, "Validating drives...")
+    drives = get_drives()
+    validate_drive(os_spec, drives, "OS")
+    if data_spec:
+        validate_drive(data_spec, drives, "data")
+
+    print("\n  Drive validation passed. Proceeding with installation.")
+
+    step(3, f"Partitioning OS drive {os_spec['device']}...")
+    partition_os(os_spec)
+
+    step(4, "Creating btrfs subvolumes...")
+    create_subvolumes(os_spec)
+
+    step(5, "Mounting OS subvolumes...")
+    mount_os(os_spec)
+
+    if data_spec:
+        step(6, f"Partitioning data drive {data_spec['device']}...")
+        partition_data(data_spec)
+        step(7, "Mounting data partitions...")
+        mount_data(data_spec)
+
+    step(8, "Generating NixOS hardware configuration...")
+    run("nixos-generate-config --root /mnt")
+
+    step(9, "Generating SSH host key...")
+    Path("/mnt/etc/ssh").mkdir(parents=True, exist_ok=True)
+    run("ssh-keygen -t ed25519 -N '' -f /mnt/etc/ssh/ssh_host_ed25519_key")
+
+    step(10, "Deriving host age key and re-encrypting secrets...")
+    host_age_pub = setup_host_age_key(age_key)
+
+    step(11, "Copying repo to /mnt/etc/nixos...")
+    copy_repo()
+
+    step(12, "Running nixos-install...")
+    run("nixos-install --root /mnt --no-root-passwd --flake /mnt/etc/nixos#killy")
+
+    print()
+    print("=" * 50)
+    print("  Installation complete.")
+    print(f"  Host age public key: {host_age_pub}")
+    print("  Update .sops.yaml on the build host:")
+    print(f"    - {host_age_pub}  # killy host key")
+    print("=" * 50)
+
+    step(13, "Unmounting...")
+    run("umount -R /mnt")
+
+    print("\nRebooting in 5 seconds...")
+    time.sleep(5)
+    run("reboot")
+
+if __name__ == "__main__":
+    main()

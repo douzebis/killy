@@ -199,6 +199,31 @@ in {
     };
 
     # -------------------------------------------------------------------------
+    # Writable overlay over /etc/nixos
+    #
+    # The ISO embeds /etc/nixos on a read-only squashfs. Mounting an overlayfs
+    # here gives a writable /etc/nixos for the duration of the session (changes
+    # live in RAM on /run/nixos-overlay/upper/). This makes it easy to sync an
+    # updated repo from the build host (rsync, scp) without needing to reflash
+    # the Lexar for every iteration.
+    #
+    # Upper and work dirs are on tmpfs (/run) — changes are lost on reboot.
+    # -------------------------------------------------------------------------
+
+    system.activationScripts.nixosOverlay = {
+      text = ''
+        mkdir -p /run/nixos-overlay/upper /run/nixos-overlay/work
+        # Only mount if not already overlaid (idempotent).
+        if ! grep -q 'overlay /etc/nixos' /proc/mounts 2>/dev/null; then
+          ${pkgs.util-linux}/bin/mount -t overlay overlay \
+            -o lowerdir=/etc/nixos,upperdir=/run/nixos-overlay/upper,workdir=/run/nixos-overlay/work \
+            /etc/nixos
+        fi
+      '';
+      deps = [];
+    };
+
+    # -------------------------------------------------------------------------
     # installer-authorized-keys.service
     #
     # Runs early in boot — before sshd — to populate ~nixos/.ssh/authorized_keys
@@ -336,6 +361,8 @@ in {
       if [ -r /run/age-install-key ]; then
         export SOPS_AGE_KEY=$(cat /run/age-install-key)
       fi
+      # Put repo helpers (install, build-iso, killy-serial, etc.) on PATH.
+      export PATH="/etc/nixos/bin:$PATH"
     '';
 
     # -------------------------------------------------------------------------
@@ -358,10 +385,31 @@ in {
 
     environment.systemPackages = with pkgs; [
       age             # age encryption — used to generate host keys at install time
+      ssh-to-age      # derive age key from SSH ed25519 host key (used by bin/install)
       sops            # SOPS secrets decryption
       yubikey-manager # ykman — Yubikey management and diagnostics
       git             # clone / inspect the repo
+      rsync           # sync repo from build host to /etc/nixos overlay
+      vim             # editor
       jq              # parse JSON output from various tools
+      htop            # process and resource monitoring
+      curl            # test network connectivity
+      strace          # debug service startup failures
+      nmap            # network diagnostics
+      tcpdump         # packet-level WiFi/DHCP debugging
+      dmidecode       # read BIOS/board/RAM details from DMI table
+      nvme-cli        # NVMe drive info and SMART data
+      smartmontools   # SMART data for all drive types
+      pciutils        # lspci — PCI device inventory
+      usbutils        # lsusb — USB device inventory
+      iw              # WiFi interface info and capabilities
+      parted          # partition inspection (parted -l)
+      util-linux      # lsblk, blkid, findmnt, lscpu
+      btrfs-progs     # btrfs subvolume/filesystem inspection
+      cryptsetup      # LUKS inspection (cryptsetup luksDump)
+      e2fsprogs       # fsck, tune2fs
+      dosfstools      # EFI partition tools (fsck.fat, mkfs.fat)
+      (python3.withPackages (ps: [ ps.pyyaml ]))  # scripting + yaml parsing (bin/install)
     ];
   };
 }

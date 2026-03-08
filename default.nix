@@ -54,12 +54,21 @@ let
       # operation, but handy when debugging PIV certificate issues.
       openssl
 
-      # python3 + cryptography — runtime for scripts/yk-setup.py and
-      # scripts/yk-unwrap.py on the build host.
+      # python3 + libraries — runtime for scripts/ and bin/ on the build host.
       # Note: the ISO uses a separate Python env built from yubikey-manager's
       # own pythonModule, not this one (see installer/base.nix — unwrapPython).
       python3
       python3Packages.cryptography
+      # ovh — OVH Python SDK for DNS zone and PTR management (bin/ovh-dns-sync).
+      python3Packages.ovh
+      # dnspython — DNS resolver used by ovh-dns-sync for FCrDNS validation.
+      python3Packages.dnspython
+      # pyyaml — YAML parsing used by installer-authorized-keys.py and ovh-dns-sync.
+      python3Packages.pyyaml
+
+      # wireguard-tools — wg key generation (wg genkey / wg pubkey) used when
+      # provisioning WireGuard peers during the killy host OS install.
+      wireguard-tools
 
       # bash and jq — shell scripting and JSON parsing used by helper scripts.
       bash
