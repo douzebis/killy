@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# killy-smoke-test — verify the live installer is up and healthy after a reboot.
+#
+# Usage: killy-smoke-test [ip]
+#   ip  IPv4 address of the live installer (default: 192.168.42.86)
+#
+# Runs all checks independently — a failure in one does not abort the others.
+# Prints a report at the end and exits 0 if all passed, 1 if any failed.
+#
+# Prerequisites (all available inside nix-shell):
+#   - killy-serial  on PATH (for the serial console check)
+#   - ssh           on PATH
+
+set -uo pipefail
+
+KILLY_IP="${1:-192.168.42.86}"
+SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+          -o ControlMaster=auto \
+          -o ControlPath=/tmp/killy-smoke-%r@%h:%p \
+          -o ControlPersist=30"
+SSH="ssh $SSH_OPTS nixos@$KILLY_IP"
+
+# ---------------------------------------------------------------------------
+# Result tracking
+# ---------------------------------------------------------------------------
+
+declare -a CHECK_IDS=()
+declare -A CHECK_NAMES=()
+declare -A CHECK_RESULTS=()   # PASS | FAIL | SKIP
+declare -A CHECK_DETAILS=()   # optional detail string
+
+record() {
+    local id="$1" name="$2" result="$3" detail="${4:-}"
+    CHECK_IDS+=("$id")
+    CHECK_NAMES[$id]="$name"
+    CHECK_RESULTS[$id]="$result"
+    CHECK_DETAILS[$id]="$detail"
+}
+
+# Run a command, return 0 on success. Never aborts the script.
+try() { "$@" 2>/dev/null; }
+
+# ---------------------------------------------------------------------------
+# C1 — Serial console reachable
+# ---------------------------------------------------------------------------
+
+c1_serial() {
+    # Restart the reader to flush any stale buffer content from before reboot
+    if ! try killy-serial -r; then
+        record C1 "serial console reachable" FAIL "could not start reader (FT232 present?)"
+        return
+    fi
+
+    local out
+    out=$(killy-serial "echo smoke-test-ping" 4 2>/dev/null) || true
+    if echo "$out" | grep -q "smoke-test-ping"; then
+        record C1 "serial console reachable" PASS
+    else
+        record C1 "serial console reachable" FAIL "no response to echo probe"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# C2 — SSH reachable
+# ---------------------------------------------------------------------------
+
+c2_ssh() {
+    local err
+    if err=$(ssh $SSH_OPTS nixos@$KILLY_IP true 2>&1); then
+        record C2 "SSH reachable" PASS
+        return 0
+    else
+        record C2 "SSH reachable" FAIL "$err"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# C3–C5 — Systemd service status (via SSH)
+# ---------------------------------------------------------------------------
+
+c_service() {
+    local id="$1" name="$2" unit="$3"
+    local status
+    status=$(try $SSH "systemctl is-active $unit") || true
+    if [[ "$status" == "active" ]]; then
+        record "$id" "$name" PASS
+    else
+        record "$id" "$name" FAIL "systemctl is-active: ${status:-no output}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# C6 — Age key present and non-empty
+# ---------------------------------------------------------------------------
+
+c6_age_key() {
+    if try $SSH "test -s /run/age-install-key"; then
+        record C6 "age key present" PASS
+    else
+        record C6 "age key present" FAIL "/run/age-install-key absent or empty"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# C7 — SOPS_AGE_KEY exported in login shell
+# ---------------------------------------------------------------------------
+
+c7_sops_env() {
+    local out
+    out=$(try $SSH "bash -lc 'echo \${SOPS_AGE_KEY:+set}'") || true
+    if [[ "$out" == "set" ]]; then
+        record C7 "SOPS_AGE_KEY in login shell" PASS
+    else
+        record C7 "SOPS_AGE_KEY in login shell" FAIL "variable empty or unset in login shell"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# C8 — Default route present (network up)
+# ---------------------------------------------------------------------------
+
+c8_route() {
+    local out
+    out=$(try $SSH "ip route show default") || true
+    if [[ -n "$out" ]]; then
+        record C8 "default route present" PASS
+    else
+        record C8 "default route present" FAIL "no default route"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Run all checks
+# ---------------------------------------------------------------------------
+
+echo "killy smoke test — $(date '+%Y-%m-%d %H:%M:%S')"
+echo "target: nixos@${KILLY_IP}"
+echo "---------------------------------------"
+
+c1_serial
+
+if c2_ssh; then
+    c_service C3 "yk-unwrap.service active"              yk-unwrap
+    c_service C4 "installer-authorized-keys active"      installer-authorized-keys
+    c_service C5 "installer-network.service active"      installer-network
+    c6_age_key
+    c7_sops_env
+    c8_route
+else
+    # SSH unavailable — skip all SSH-dependent checks
+    for id in C3 C4 C5 C6 C7 C8; do
+        record $id "(skipped — SSH unavailable)" SKIP
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------
+
+echo ""
+FAILED=0
+for id in "${CHECK_IDS[@]}"; do
+    result="${CHECK_RESULTS[$id]}"
+    detail="${CHECK_DETAILS[$id]}"
+    detail_str=""
+    [[ -n "$detail" ]] && detail_str="  ($detail)"
+    printf "%-4s %-44s %s%s\n" "$id" "${CHECK_NAMES[$id]}" "$result" "$detail_str"
+    [[ "$result" == "FAIL" ]] && ((FAILED++)) || true
+done
+
+echo "---------------------------------------"
+TOTAL=${#CHECK_IDS[@]}
+if [[ $FAILED -eq 0 ]]; then
+    echo "All ${TOTAL} checks passed."
+    exit 0
+else
+    echo "${FAILED} of ${TOTAL} checks failed."
+    exit 1
+fi

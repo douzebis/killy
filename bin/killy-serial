@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# killy-serial — send a command to killy's serial console and print the response.
+#
+# Usage:
+#   killy-serial "command" [wait_seconds]   send command, wait, print new output
+#   killy-serial -r                         (re)start the background reader/buffer
+#
+# A background `cat` process reads from /dev/ttyUSB0 and appends everything to
+# /tmp/killy-buf. It persists across calls so no output is ever missed between
+# invocations. It is started automatically on first use; use -r to restart it
+# after the FT232 adapter is unplugged and replugged.
+#
+# wait_seconds (default 3) is how long to wait after sending the command before
+# reading the response. Increase it for commands that take longer to complete.
+#
+# Prerequisites:
+#   - FT232 adapter attached to the experiment VM (vendor 0403:6001)
+#   - experiment user is in the dialout group (no sudo needed)
+#   - The adapter appears as /dev/ttyUSB0
+
+set -euo pipefail
+
+SERIAL=/dev/ttyUSB0
+BUFFER=/tmp/killy-buf
+READER_PID_FILE=/tmp/killy-reader.pid
+
+usage() {
+    echo "Usage: killy-serial \"command\" [wait_seconds]" >&2
+    echo "       killy-serial -r   (restart reader)" >&2
+    exit 1
+}
+
+start_reader() {
+    # Kill any existing reader (ignore error if PID file absent or stale)
+    kill "$(cat "$READER_PID_FILE" 2>/dev/null)" 2>/dev/null || true
+
+    # Configure the serial port: 115200 8N1, raw mode (no line discipline),
+    # no echo, no hardware flow control. Must match killy's boot.kernelParams.
+    stty -F "$SERIAL" 115200 cs8 -cstopb -parenb raw -echo -crtscts
+
+    # Truncate the buffer and start a fresh background reader
+    > "$BUFFER"
+    cat "$SERIAL" >> "$BUFFER" &
+    echo $! > "$READER_PID_FILE"
+    echo "[killy] reader started (PID $(cat "$READER_PID_FILE"))" >&2
+
+    # Brief pause to let the reader open the port before we try to write to it
+    sleep 0.5
+}
+
+if [[ "${1:-}" == "-r" ]]; then
+    start_reader
+    exit 0
+fi
+
+[[ $# -ge 1 ]] || usage
+
+CMD="$1"
+WAIT="${2:-3}"
+
+# Start reader automatically if not running (first use, or after reboot)
+if [[ ! -f "$READER_PID_FILE" ]] || ! kill -0 "$(cat "$READER_PID_FILE")" 2>/dev/null; then
+    start_reader
+fi
+
+# Record the current buffer size, send the command, wait, then print only
+# the bytes appended since the command was sent (stripping CR from CRLF).
+BEFORE=$(wc -c < "$BUFFER")
+printf '%s\r\n' "$CMD" > "$SERIAL"
+sleep "$WAIT"
+tail -c "+$((BEFORE + 1))" "$BUFFER" | tr -d '\r'

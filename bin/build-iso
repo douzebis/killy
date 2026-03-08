@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Build the installer ISO for a target host.
+#
+# Usage: build-iso [hostname] [extra nix build flags]
+#   hostname          — NixOS configuration to build (default: killy)
+#   extra nix flags   — e.g. --no-link, --print-out-paths, --keep-going
+#
+# The result symlink is created at ./result/. To get just the ISO path:
+#   build-iso --no-link --print-out-paths
+set -euo pipefail
+HOST="${1:-killy}"
+shift || true   # consume hostname (or no-op if no args were given)
+exec nix --extra-experimental-features "nix-command flakes" build ".#installer-iso-$HOST" "$@"
