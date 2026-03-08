@@ -198,8 +198,10 @@ in {
 
       # Installer-side helper scripts (on PATH in the installer shell).
       # Common to all hosts — reads hostname and disk spec from install-config.yaml.
-      "nixos/installer/bin/install" = {
-        source = ./bin/install;
+      # Named killy-install (not install) to avoid shadowing the standard Unix
+      # `install` utility, which nixos-install uses internally.
+      "nixos/installer/bin/killy-install" = {
+        source = ./bin/killy-install;
         mode   = "0755";
       };
 
@@ -368,7 +370,7 @@ in {
       if [ -r /run/age-install-key ]; then
         export SOPS_AGE_KEY=$(cat /run/age-install-key)
       fi
-      # Put installer helpers on PATH (install, etc.).
+      # Put installer helpers on PATH (killy-install, etc.).
       # Note: build-host tools (build-iso, killy-serial, killy-setup) live in
       # bin/ and are NOT added here — they don't belong on the installer.
       export PATH="/etc/nixos/installer/bin:$PATH"
