@@ -19,10 +19,22 @@ WIFI_KEY=$(sops decrypt --extract '["installer"]["wifi_key"]' "$CONFIG")
 
 echo "installer-network: configuring WiFi for SSID: ${WIFI_SSID}"
 
-wpa_passphrase "$WIFI_SSID" "$WIFI_KEY" > /run/wpa_supplicant.conf
-chmod 600 /run/wpa_supplicant.conf
+# Add a new network block to the running wpa_supplicant daemon.
+#
+# NixOS writes wpa_supplicant's config to a Nix store path at startup, so we
+# cannot replace or modify it. Instead we use wpa_cli to add a network block
+# at runtime. wpa_cli communicates with the already-running daemon via its
+# control socket (/var/run/wpa_supplicant/<iface>).
+#
+# The ssid and psk values must be passed with an extra layer of shell quoting
+# so that wpa_cli receives them surrounded by double quotes, as required by
+# the wpa_supplicant protocol. The '"'"..."'"' construct produces: "value"
+NETID=$(wpa_cli -i "${WIFI_INTERFACE}" add_network)
+wpa_cli -i "${WIFI_INTERFACE}" set_network "${NETID}" ssid '"'"${WIFI_SSID}"'"'
+wpa_cli -i "${WIFI_INTERFACE}" set_network "${NETID}" psk '"'"${WIFI_KEY}"'"'
+wpa_cli -i "${WIFI_INTERFACE}" enable_network "${NETID}"
+wpa_cli -i "${WIFI_INTERFACE}" select_network "${NETID}"
 
-systemctl restart "wpa_supplicant-${WIFI_INTERFACE}.service"
 echo "installer-network: WiFi configured, waiting for association..."
 
 # Wait up to 30s for an IP address
