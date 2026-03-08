@@ -198,7 +198,8 @@ def main():
     args = parser.parse_args()
 
     cn = f"{args.hostname}-install-key"
-    age_key_bytes = open(args.age_key, "rb").read()
+    with open(args.age_key, "rb") as f:
+        age_key_bytes = f.read()
 
     piv = get_piv_session()
     slot, yubikey_pub = get_or_create_slot(piv, cn, args.force)

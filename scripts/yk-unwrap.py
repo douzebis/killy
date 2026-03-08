@@ -114,7 +114,8 @@ def main():
     cn = f"{args.hostname}-install-key"
 
     try:
-        blob = open(args.wrapped_key, "rb").read()
+        with open(args.wrapped_key, "rb") as f:
+            blob = f.read()
     except OSError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
