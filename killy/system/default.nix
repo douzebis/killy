@@ -2,8 +2,8 @@
 #
 # This file is the entry point for `nixosConfigurations.killy` in flake.nix.
 # It imports all host OS modules. Hardware-specific details (UUIDs, kernel
-# modules) live in hardware-configuration.nix, which is regenerated during
-# the spec 0005 install and must be committed before nixos-install runs.
+# modules) live in hardware-configuration.nix, which is generated fresh by
+# killy-install during each install and is NOT tracked in git (.gitignore).
 #
 # Deploy from the build host:
 #   nixos-rebuild switch --flake .#killy \
