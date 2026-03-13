@@ -10,6 +10,11 @@
 #       or directly: nix build .#installer-iso-killy
 #       Result:      ./result/iso/killy-installer.iso
 #
+# Note: nixosConfigurations.killy lives in killy/flake.nix (self-contained,
+# mirrors /etc/nixos/ on the installed machine). Deploy with:
+#   nixos-rebuild switch --flake ./killy#killy \
+#     --target-host fred@<killy-ip> --use-remote-sudo
+#
 # Adding a new host:
 #   1. Create <host>/iso.nix (copy killy/iso.nix and adjust all fields).
 #   2. Add a nixosConfigurations.installer-<host> entry below.
@@ -31,17 +36,6 @@
     # Enter with:  cd ~/code/killy && nix-shell
     devShells.${system}.default =
       import ./default.nix { pkgs = nixpkgs.legacyPackages.${system}; };
-
-    # Installed host OS configuration for killy.
-    # Deploy with: nixos-rebuild switch --flake .#killy \
-    #   --target-host fred@<killy-ip> --use-remote-sudo
-    nixosConfigurations.killy = nixpkgs.lib.nixosSystem {
-      inherit system;
-      modules = [
-        ./killy/system/default.nix
-        sops-nix.nixosModules.sops
-      ];
-    };
 
     # Full NixOS configuration for the killy installer ISO.
     # This is an intermediate object; the actual ISO derivation is extracted

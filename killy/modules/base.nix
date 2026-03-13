@@ -3,6 +3,8 @@
 # Covers: hostname, users, SSH, networking (IPv4 static lease + IPv6 pinning),
 # boot loader, sops-nix, and firewall baseline. The host OS is intentionally
 # minimal — no application services run on bare metal.
+#
+# Part of killy/modules/ — mirrored to /etc/nixos/modules/ on the installed system.
 { config, pkgs, lib, ... }:
 
 {
@@ -49,11 +51,12 @@
   networking.wireless = {
     enable = true;
     interfaces = [ "wlo1" ];
-    # secretsFile must contain lines of the form KEY=value.
-    # The @wifi_key@ placeholder in the network PSK is substituted from this file.
-    # The secret value is stored as "wifi_key=<psk>" so it satisfies the format.
+    # secretsFile sets wpa_supplicant's ext_password_backend. Secrets are
+    # referenced as ext:<key> where <key> matches a KEY=value line in the file.
+    # The sops secret file contains "wifi_key=<psk>" so we reference it as
+    # ext:wifi_key via pskRaw.
     secretsFile = config.sops.secrets."system/wifi_key".path;
-    networks."douze-bis".psk = "@wifi_key@";
+    networks."douze-bis".pskRaw = "ext:wifi_key";
   };
 
   # Pin the EUI-64 IPv6 address — privacy extensions would rotate the address
@@ -96,7 +99,8 @@
   # ---------------------------------------------------------------------------
 
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-  sops.defaultSopsFile = ../install-config.yaml;
+  sops.defaultSopsFile = "/etc/nixos/install-config.yaml";
+  sops.validateSopsFiles = false;
 
   sops.secrets."system/wifi_key" = {};
 
@@ -107,6 +111,29 @@
   sops.secrets."wireguard/host_private_key" = {};
 
   # ---------------------------------------------------------------------------
+  # Serial console — ttyUSB0 (FT232 USB-serial adapter, null-modem to killy)
+  # ---------------------------------------------------------------------------
+
+  # Route kernel output and getty to the USB-serial adapter so the build host
+  # can interact with killy without a monitor.
+  boot.kernelParams = [
+    "console=ttyUSB0,115200"  # primary: USB-serial adapter
+    "console=tty0"            # fallback: local display
+  ];
+
+  systemd.services."serial-getty@ttyUSB0" = {
+    wantedBy          = [ "getty.target" ];
+    overrideStrategy  = "asDropin";
+    serviceConfig = {
+      Restart   = "always";
+      ExecStart = [
+        ""  # clear the upstream default
+        "${pkgs.util-linux}/bin/agetty 115200 ttyUSB0 vt220"
+      ];
+    };
+  };
+
+  # ---------------------------------------------------------------------------
   # Misc
   # ---------------------------------------------------------------------------
 
@@ -115,6 +142,8 @@
     vim
     htop
     wireguard-tools
+    lsof
+    psmisc  # fuser, killall
   ];
 
   system.stateVersion = "25.05";

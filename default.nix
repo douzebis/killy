@@ -84,6 +84,8 @@ let
 
       # ruff — Python linter for scripts/. Run manually: ruff check scripts/
       ruff
+
+      usbutils
     ];
   };
 

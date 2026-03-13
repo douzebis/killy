@@ -590,16 +590,20 @@ git commit -m "killy: post-install — updated host age key in install-config an
 
 Note: `hardware-configuration.nix` is intentionally not tracked in git — it
 is generated fresh by `killy-install` on each install and is specific to the
-installed partitions. It lives on the running system at
-`/etc/nixos/killy/system/hardware-configuration.nix` and is deployed via
-`nixos-rebuild` from there.
+installed partitions. It lives on killy at `/etc/nixos/hardware-configuration.nix`.
 
 #### Step 5 — Deploy config changes
 
-For subsequent NixOS config changes, deploy from the build host over LAN
-(or WireGuard once established):
+`killy/` in the build host repo is the source of truth for killy's NixOS
+config. To apply changes:
 
 ```bash
-nixos-rebuild switch --flake .#killy \
+# 1. Edit files in killy/ and commit.
+
+# 2. Sync to killy.
+rsync -av --delete killy/ fred@192.168.42.44:/etc/nixos/
+
+# 3. Rebuild and switch (standard NixOS procedure).
+nixos-rebuild switch --flake /etc/nixos#killy \
   --target-host fred@192.168.42.44 --use-remote-sudo
 ```

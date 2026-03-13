@@ -43,18 +43,16 @@
   # boot; also callable manually (see docs/user-guide.md).
   installer.unwrapScript = ../scripts/yk-unwrap.py;
 
-  # Flake entry point for nixos-install (repo-level, shared across all hosts).
-  installer.flakeSrc  = ../flake.nix;
-  installer.flakeLock = ../flake.lock;
-
   # killy host OS configuration — embedded so nixos-install is self-contained.
   # hardware-configuration.nix is NOT embedded here; it is generated fresh by
-  # killy-install at install time and copied into killy/system/ before nixos-install runs.
+  # killy-install at install time via nixos-generate-config.
   environment.etc = {
-    "nixos/killy/system/default.nix".source   = ./system/default.nix;
-    "nixos/killy/system/base.nix".source      = ./system/base.nix;
-    "nixos/killy/system/wireguard.nix".source = ./system/wireguard.nix;
-    "nixos/killy/system/virt.nix".source      = ./system/virt.nix;
+    "nixos/flake.nix".source             = ./flake.nix;
+    "nixos/flake.lock".source            = ./flake.lock;
+    "nixos/configuration.nix".source     = ./configuration.nix;
+    "nixos/modules/base.nix".source      = ./modules/base.nix;
+    "nixos/modules/wireguard.nix".source = ./modules/wireguard.nix;
+    "nixos/modules/virt.nix".source      = ./modules/virt.nix;
   };
 
   # Output ISO file name and volume label (visible in boot menus and when

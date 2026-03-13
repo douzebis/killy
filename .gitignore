@@ -1,4 +1,5 @@
 /.DS_Store
 /motoko
 /result*
-/killy/system/hardware-configuration.nix
+/killy/hardware-configuration.nix
+/killy/system/

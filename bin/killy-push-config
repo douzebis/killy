@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# killy-push-config — push install-config.yaml to the live installer on killy.
+# killy-push-config — push updated files to the live installer on killy.
 #
 # Run from the build host (inside nix-shell):
 #
 #   bin/killy-push-config <killy-installer-ip>
 #
-# The file at /etc/nixos/killy/install-config.yaml on the installer is a
-# symlink into the read-only squashfs. This script unlinks it first (if
-# needed) so the overlayfs upper layer gets a real writable file.
+# Pushes:
+#   - killy/install-config.yaml  → /etc/nixos/killy/install-config.yaml
+#   - installer/bin/killy-install → /etc/nixos/installer/bin/killy-install
+#
+# Both paths on the installer may be symlinks into the read-only squashfs.
+# This script unlinks them first (if needed) so the overlayfs upper layer
+# gets a real writable file.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CONFIG_SRC="$REPO_ROOT/killy/install-config.yaml"
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <killy-installer-ip>" >&2
@@ -20,16 +23,21 @@ if [[ $# -lt 1 ]]; then
 fi
 
 HOST="$1"
-DEST=/etc/nixos/killy/install-config.yaml
 SSH="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 nixos@${HOST}"
 
-echo "killy-push-config: pushing install-config.yaml to nixos@${HOST}..."
+push_file() {
+    local src="$1"
+    local dest="$2"
+    local mode="${3:-644}"
+    local tmp="/tmp/$(basename "$dest")"
 
-# Unlink if it's still a symlink into the squashfs.
-$SSH "if [ -L '$DEST' ]; then sudo unlink '$DEST'; fi"
+    echo "killy-push-config: pushing $(basename "$dest") to ${HOST}:${dest}..."
+    $SSH "if [ -L '$dest' ]; then sudo unlink '$dest'; fi"
+    scp "$src" "nixos@${HOST}:${tmp}"
+    $SSH "sudo mv '$tmp' '$dest' && sudo chmod $mode '$dest'"
+    echo "killy-push-config: done — $($SSH "ls -lh '$dest'")"
+}
 
-# Upload via /tmp (scp cannot write directly to root-owned dirs).
-scp "$CONFIG_SRC" "nixos@${HOST}:/tmp/install-config.yaml"
-$SSH "sudo mv /tmp/install-config.yaml '$DEST' && sudo chmod 644 '$DEST'"
-
-echo "killy-push-config: done — $(ssh -o StrictHostKeyChecking=no nixos@${HOST} "ls -lh $DEST")"
+push_file "$REPO_ROOT/killy/install-config.yaml"      /etc/nixos/killy/install-config.yaml        644
+push_file "$REPO_ROOT/killy/modules/base.nix"         /etc/nixos/modules/base.nix                 644
+push_file "$REPO_ROOT/installer/bin/killy-install"    /etc/nixos/installer/bin/killy-install      755

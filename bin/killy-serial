@@ -30,6 +30,22 @@ usage() {
     exit 1
 }
 
+send_break() {
+    # Send a TIOCSBRK/TIOCCBRK break signal on the serial port.
+    # agetty --keep-baud uses the break to lock in the current baud rate
+    # instead of cycling to the next one in its list.
+    python3 -c "
+import fcntl, termios, time
+TIOCSBRK = 0x5427
+TIOCCBRK = 0x5428
+fd = open('$SERIAL', 'rb+', buffering=0)
+fcntl.ioctl(fd, TIOCSBRK)
+time.sleep(0.3)
+fcntl.ioctl(fd, TIOCCBRK)
+fd.close()
+"
+}
+
 start_reader() {
     # Kill any existing reader (ignore error if PID file absent or stale)
     kill "$(cat "$READER_PID_FILE" 2>/dev/null)" 2>/dev/null || true
@@ -53,6 +69,11 @@ if [[ "${1:-}" == "-r" ]]; then
     exit 0
 fi
 
+if [[ "${1:-}" == "-b" ]]; then
+    send_break
+    exit 0
+fi
+
 [[ $# -ge 1 ]] || usage
 
 CMD="$1"
@@ -66,6 +87,6 @@ fi
 # Record the current buffer size, send the command, wait, then print only
 # the bytes appended since the command was sent (stripping CR from CRLF).
 BEFORE=$(wc -c < "$BUFFER")
-printf '%s\r\n' "$CMD" > "$SERIAL"
+printf '%s\n' "$CMD" > "$SERIAL"
 sleep "$WAIT"
 tail -c "+$((BEFORE + 1))" "$BUFFER" | tr -d '\r'
