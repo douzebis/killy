@@ -1,18 +1,17 @@
 creation_rules:
-  - path_regex: killy/install-config\.yaml$
+  - path_regex: (killy/)?install-config\.yaml$
     encrypted_regex: ^(acme_creds|dns_creds|s3_creds|mail_creds|mail\.private|wifi_key|host_private_key|laptop_private_key|hashed_password)$
     age:
       # Recipients: operator key and Yubikey install key only.
       #
       # killy's host age key is intentionally NOT listed here. It is added by
-      # killy-install at install time via `sops updatekeys`, so the copy of
-      # install-config.yaml that lands on killy is encrypted for all three
-      # recipients (operator, install key, host key). The build host copy only
-      # needs the two keys below — both of which the operator controls — so
-      # that secrets can be decrypted and updated here without needing killy to
-      # be reachable. After editing secrets, run killy-install (or manually
-      # rsync + sops updatekeys on killy) to propagate the new host-key
-      # recipient.
+      # killy-enroll-host-key.service on first boot via `sops updatekeys`,
+      # so the copy of install-config.yaml that lands on killy is encrypted
+      # for all three recipients (operator, install key, host key).
+      # The build host copy only needs the two keys below.
+      #
+      # The path_regex matches both the build host path (killy/install-config.yaml)
+      # and the installed system path (/etc/nixos/install-config.yaml).
 
       # operator key (~/.config/sops/age/keys.txt on build host)
       # — derived from build host SSH key via ssh-to-age

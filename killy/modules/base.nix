@@ -25,6 +25,8 @@ in
 
   time.timeZone = "Europe/Paris";
 
+  console.keyMap = "fr";
+
   # ---------------------------------------------------------------------------
   # Boot loader
   # ---------------------------------------------------------------------------
@@ -141,7 +143,7 @@ in
       Restart   = "always";
       ExecStart = [
         ""  # clear the upstream default
-        "${pkgs.util-linux}/bin/agetty 115200 ttyUSB0 vt220"
+        "${pkgs.util-linux}/bin/agetty --autologin fred 115200 ttyUSB0 vt220"
       ];
     };
   };
