@@ -232,6 +232,32 @@ def mount_data(dev, spec):
         run(f"mount -o {opts} {dev}p{i+1} {mp}")
 
 # ---------------------------------------------------------------------------
+# Enroll host age key as sops recipient
+# ---------------------------------------------------------------------------
+
+def enroll_host_key(age_key):
+    host_key_pub = MNT / "etc" / "ssh" / "ssh_host_ed25519_key.pub"
+    config       = MNT / "etc" / "nixos" / "install-config.yaml"
+    sops_yaml    = MNT / "etc" / "nixos" / ".sops.yaml"
+
+    if not host_key_pub.exists():
+        bail(f"SSH host key not found at {host_key_pub} — nixos-install may not have generated it")
+
+    host_age_pub = run_capture(f"ssh-to-age -i {host_key_pub}")
+    print(f"  Host age public key: {host_age_pub}")
+
+    env = os.environ.copy()
+    env["SOPS_AGE_KEY"]  = age_key
+    env["SOPS_CONFIG"]   = str(sops_yaml)
+    result = subprocess.run(
+        ["sops", "updatekeys", "--yes", str(config)],
+        env=env
+    )
+    if result.returncode != 0:
+        bail("sops updatekeys failed")
+    print("  install-config.yaml re-encrypted for host key")
+
+# ---------------------------------------------------------------------------
 # Copy repo to /mnt
 # ---------------------------------------------------------------------------
 
@@ -255,9 +281,14 @@ def copy_repo():
 
     # First-boot enrollment script and its dependencies.
     run(f"install -m 0755 {src / 'enroll-host-key.sh'} {dest / 'enroll-host-key.sh'}")
-    run(f"cp {src / 'killy/wrapped-install-key.bin'} {dest / 'wrapped-install-key.bin'}")
+    # wrapped-install-key.bin goes under killy/ to match yk-unwrap-loop.sh's
+    # WRAPPED_KEY=/etc/nixos/${HOSTNAME}/wrapped-install-key.bin path.
+    (dest / "killy").mkdir(parents=True, exist_ok=True)
+    run(f"cp {src / 'killy/wrapped-install-key.bin'} {dest / 'killy/wrapped-install-key.bin'}")
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
     run(f"cp {src / 'scripts/yk-unwrap.py'} {dest / 'scripts/yk-unwrap.py'}")
+    (dest / "installer").mkdir(parents=True, exist_ok=True)
+    run(f"install -m 0755 {src / 'installer/yk-unwrap-loop.sh'} {dest / 'installer/yk-unwrap-loop.sh'}")
 
 # ---------------------------------------------------------------------------
 # Main
@@ -318,14 +349,15 @@ def main():
     step(10, "Running nixos-install...")
     run("nixos-install --root /mnt --no-root-passwd --flake /mnt/etc/nixos#killy --impure")
 
+    step(11, "Enrolling host age key as sops recipient...")
+    enroll_host_key(age_key)
+
     print()
     print("=" * 50)
     print("  Installation complete.")
-    print("  On first boot, insert the Yubikey — killy-enroll-host-key")
-    print("  will add the host age key as a sops recipient automatically.")
     print("=" * 50)
 
-    step(11, "Unmounting...")
+    step(12, "Unmounting...")
     run("umount -R /mnt")
 
     print("\nRebooting in 5 seconds...")

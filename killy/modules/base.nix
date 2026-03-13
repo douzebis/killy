@@ -109,12 +109,15 @@ in
   # sops-nix — secrets decryption at activation time
   # ---------------------------------------------------------------------------
 
-  # Primary key: SSH host key (available on every boot after first boot).
-  # Fallback key: install age key written by enroll-host-key.service on first
-  # boot (when the host key is not yet a sops recipient).
+  # Use systemd service for secret decryption rather than activation script.
+  # This allows ordering: yk-unwrap.service runs first (Yubikey unwrap),
+  # then sops-install-secrets.service decrypts secrets using the install key.
+  # On subsequent boots (after host key enrollment), the SSH host key suffices.
+  sops.useSystemdActivation = true;
+
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-  sops.age.keyFile     = "/run/age-install-key";
-  sops.defaultSopsFile = "/etc/nixos/install-config.yaml";
+  sops.age.keyFile      = "/run/age-install-key";
+  sops.defaultSopsFile  = "/etc/nixos/install-config.yaml";
   sops.validateSopsFiles = false;
 
   sops.secrets."system/wifi_key" = {};
@@ -155,14 +158,32 @@ in
   # pcscd brokers access to the Yubikey CCID interface, needed by yk-unwrap.py.
   services.pcscd.enable = true;
 
-  # Enroll the SSH host age key as a sops recipient on first boot (and
-  # whenever it is missing — idempotent). Runs before sops-install-secrets
-  # so that /run/age-install-key is available as a fallback key on first boot.
+  # yk-unwrap: run before sops-install-secrets so the install age key is
+  # available at /run/age-install-key on first boot (before host key enrollment).
+  systemd.services.yk-unwrap = {
+    description = "Unwrap age install key from Yubikey";
+    wantedBy    = [ "sysinit.target" ];
+    before      = [ "sops-install-secrets.service" ];
+    after       = [ "pcscd.service" ];
+    wants       = [ "pcscd.service" ];
+    path        = [ unwrapPython ];
+    environment.HOSTNAME = "killy";
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart       = "${pkgs.bash}/bin/bash /etc/nixos/installer/yk-unwrap-loop.sh";
+      StandardOutput  = "journal+console";
+      StandardError   = "journal+console";
+    };
+  };
+
+  # Enroll the SSH host age key as a sops recipient on first boot (idempotent).
+  # Runs after sops-install-secrets so secrets are available, but the yk-unwrap
+  # above provides /run/age-install-key for the first boot decryption.
   systemd.services.killy-enroll-host-key = {
     description = "Enroll SSH host age key as sops recipient";
     wantedBy    = [ "multi-user.target" ];
-    before      = [ "sops-install-secrets.service" ];
-    after       = [ "sshd-keygen.service" "pcscd.service" ];
+    after       = [ "sops-install-secrets.service" "sshd-keygen.service" "pcscd.service" ];
     wants       = [ "pcscd.service" ];
     path        = [ pkgs.sops pkgs.ssh-to-age pkgs.age unwrapPython ];
     serviceConfig = {

@@ -16,6 +16,7 @@ set -euo pipefail
 
 SOPS_YAML=/etc/nixos/.sops.yaml
 CONFIG=/etc/nixos/install-config.yaml
+export SOPS_CONFIG="$SOPS_YAML"
 HOST_KEY=/etc/ssh/ssh_host_ed25519_key
 WRAPPED_KEY=/etc/nixos/wrapped-install-key.bin
 UNWRAP_SCRIPT=/etc/nixos/scripts/yk-unwrap.py
