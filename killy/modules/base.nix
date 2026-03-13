@@ -7,6 +7,15 @@
 # Part of killy/modules/ — mirrored to /etc/nixos/modules/ on the installed system.
 { config, pkgs, lib, ... }:
 
+let
+  # Python interpreter with Yubikey support for enroll-host-key.sh.
+  # yubikey-manager is not in python3Packages; build from its bundled interpreter.
+  unwrapPython = pkgs.yubikey-manager.pythonModule.withPackages (ps: [
+    pkgs.yubikey-manager
+    ps.cryptography
+  ]);
+in
+
 {
   # ---------------------------------------------------------------------------
   # System identity
@@ -98,7 +107,11 @@
   # sops-nix — secrets decryption at activation time
   # ---------------------------------------------------------------------------
 
+  # Primary key: SSH host key (available on every boot after first boot).
+  # Fallback key: install age key written by enroll-host-key.service on first
+  # boot (when the host key is not yet a sops recipient).
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+  sops.age.keyFile     = "/run/age-install-key";
   sops.defaultSopsFile = "/etc/nixos/install-config.yaml";
   sops.validateSopsFiles = false;
 
@@ -134,6 +147,30 @@
   };
 
   # ---------------------------------------------------------------------------
+  # First-boot host key enrollment
+  # ---------------------------------------------------------------------------
+
+  # pcscd brokers access to the Yubikey CCID interface, needed by yk-unwrap.py.
+  services.pcscd.enable = true;
+
+  # Enroll the SSH host age key as a sops recipient on first boot (and
+  # whenever it is missing — idempotent). Runs before sops-install-secrets
+  # so that /run/age-install-key is available as a fallback key on first boot.
+  systemd.services.killy-enroll-host-key = {
+    description = "Enroll SSH host age key as sops recipient";
+    wantedBy    = [ "multi-user.target" ];
+    before      = [ "sops-install-secrets.service" ];
+    after       = [ "sshd-keygen.service" "pcscd.service" ];
+    wants       = [ "pcscd.service" ];
+    path        = [ pkgs.sops pkgs.ssh-to-age pkgs.age unwrapPython ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart       = "${pkgs.bash}/bin/bash /etc/nixos/enroll-host-key.sh";
+    };
+  };
+
+  # ---------------------------------------------------------------------------
   # Misc
   # ---------------------------------------------------------------------------
 
@@ -143,7 +180,11 @@
     htop
     wireguard-tools
     lsof
-    psmisc  # fuser, killall
+    psmisc       # fuser, killall
+    age          # age encryption
+    ssh-to-age   # derive age key from SSH ed25519 host key
+    sops         # SOPS secrets management
+    unwrapPython # python3 + yubikey-manager + cryptography (for enroll-host-key.sh)
   ];
 
   system.stateVersion = "25.05";

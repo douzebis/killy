@@ -53,6 +53,13 @@
     "nixos/modules/base.nix".source      = ./modules/base.nix;
     "nixos/modules/wireguard.nix".source = ./modules/wireguard.nix;
     "nixos/modules/virt.nix".source      = ./modules/virt.nix;
+
+    # First-boot enrollment script — copied by killy-install to
+    # /mnt/etc/nixos/enroll-host-key.sh for killy-enroll-host-key.service.
+    "nixos/enroll-host-key.sh" = {
+      source = ./enroll-host-key.sh;
+      mode   = "0755";
+    };
   };
 
   # Output ISO file name and volume label (visible in boot menus and when
