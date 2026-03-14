@@ -5,9 +5,11 @@
 # be decrypted with the SSH host key, exits immediately (no-op). Otherwise,
 # uses the Yubikey install key to add the host age key as a sops recipient.
 #
-# This service runs Before= sops-install-secrets so that on first boot:
-#   1. This service enrolls the host key and writes /run/age-install-key.
+# Service ordering on first boot:
+#   1. yk-unwrap.service writes /run/age-install-key (Yubikey unwrap).
 #   2. sops-install-secrets activates using /run/age-install-key (install key).
+#   3. This service runs After= sops-install-secrets, enrolls the host age key,
+#      and re-encrypts install-config.yaml for the host key.
 # On subsequent boots:
 #   1. This service exits immediately (host key already enrolled).
 #   2. sops-install-secrets activates using the SSH host key.
@@ -18,7 +20,7 @@ SOPS_YAML=/etc/nixos/.sops.yaml
 CONFIG=/etc/nixos/install-config.yaml
 export SOPS_CONFIG="$SOPS_YAML"
 HOST_KEY=/etc/ssh/ssh_host_ed25519_key
-WRAPPED_KEY=/etc/nixos/wrapped-install-key.bin
+WRAPPED_KEY=/etc/nixos/killy/wrapped-install-key.bin
 UNWRAP_SCRIPT=/etc/nixos/scripts/yk-unwrap.py
 AGE_KEY_FILE=/run/age-install-key
 

@@ -85,7 +85,7 @@ def load_config():
         bail(f"Failed to decrypt {CONFIG_PATH}:\n{result.stderr}")
 
     import yaml
-    return yaml.safe_load(result.stdout), age_key
+    return yaml.safe_load(result.stdout)
 
 # ---------------------------------------------------------------------------
 # Drive validation
@@ -232,32 +232,6 @@ def mount_data(dev, spec):
         run(f"mount -o {opts} {dev}p{i+1} {mp}")
 
 # ---------------------------------------------------------------------------
-# Enroll host age key as sops recipient
-# ---------------------------------------------------------------------------
-
-def enroll_host_key(age_key):
-    host_key_pub = MNT / "etc" / "ssh" / "ssh_host_ed25519_key.pub"
-    config       = MNT / "etc" / "nixos" / "install-config.yaml"
-    sops_yaml    = MNT / "etc" / "nixos" / ".sops.yaml"
-
-    if not host_key_pub.exists():
-        bail(f"SSH host key not found at {host_key_pub} — nixos-install may not have generated it")
-
-    host_age_pub = run_capture(f"ssh-to-age -i {host_key_pub}")
-    print(f"  Host age public key: {host_age_pub}")
-
-    env = os.environ.copy()
-    env["SOPS_AGE_KEY"]  = age_key
-    env["SOPS_CONFIG"]   = str(sops_yaml)
-    result = subprocess.run(
-        ["sops", "updatekeys", "--yes", str(config)],
-        env=env
-    )
-    if result.returncode != 0:
-        bail("sops updatekeys failed")
-    print("  install-config.yaml re-encrypted for host key")
-
-# ---------------------------------------------------------------------------
 # Copy repo to /mnt
 # ---------------------------------------------------------------------------
 
@@ -281,8 +255,8 @@ def copy_repo():
 
     # First-boot enrollment script and its dependencies.
     run(f"install -m 0755 {src / 'enroll-host-key.sh'} {dest / 'enroll-host-key.sh'}")
-    # wrapped-install-key.bin goes under killy/ to match yk-unwrap-loop.sh's
-    # WRAPPED_KEY=/etc/nixos/${HOSTNAME}/wrapped-install-key.bin path.
+    # wrapped-install-key.bin under killy/ — matches WRAPPED_KEY path in both
+    # yk-unwrap-loop.sh and enroll-host-key.sh: /etc/nixos/${HOSTNAME}/wrapped-install-key.bin
     (dest / "killy").mkdir(parents=True, exist_ok=True)
     run(f"cp {src / 'killy/wrapped-install-key.bin'} {dest / 'killy/wrapped-install-key.bin'}")
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
@@ -303,7 +277,7 @@ def main():
     print("=" * 50)
 
     step(1, "Loading and decrypting install-config.yaml...")
-    config, age_key = load_config()
+    config = load_config()
 
     install = config.get("install")
     if not install:
@@ -346,16 +320,36 @@ def main():
     step(9, "Copying repo to /mnt/etc/nixos...")
     copy_repo()
 
-    step(10, "Running nixos-install...")
-    run("nixos-install --root /mnt --no-root-passwd --flake /mnt/etc/nixos#killy --impure")
+    step(10, "Copying ISO store to target store...")
+    # Use `nix copy` to transfer all store paths from the live ISO into
+    # /mnt/nix/store and register them in /mnt's Nix DB in one step.
+    # This correctly handles both output paths and their closure metadata,
+    # ensuring nixos-install finds everything locally (no network access).
+    # nix-command + flakes are enabled in nix.settings on the ISO.
+    all_paths = run_capture("nix path-info --all")
+    path_list = all_paths.splitlines()
+    print(f"  copying {len(path_list)} store paths to /mnt via nix copy")
+    # nix copy accepts paths as arguments; batch to avoid ARG_MAX.
+    batch = 50
+    for i in range(0, len(path_list), batch):
+        chunk = " ".join(path_list[i:i+batch])
+        run(f"nix copy --no-check-sigs --to 'local?root=/mnt' {chunk}")
 
-    step(11, "Enrolling host age key as sops recipient...")
-    enroll_host_key(age_key)
+    step(11, "Running nixos-install...")
+    # Re-evaluate the flake to get a toplevel with the real hardware-configuration.nix
+    # (correct UUIDs/fstab). All dependencies are already registered in /mnt's store;
+    # nixos-install only needs to build the thin toplevel (symlinks + fstab text).
+    run("nixos-install --root /mnt --no-root-passwd --flake /mnt/etc/nixos#killy"
+        " --impure"
+        " --no-channel-copy"
+        " --option substituters ''")
 
     print()
     print("=" * 50)
     print("  Installation complete.")
     print("=" * 50)
+    print("  Host age key enrollment happens on first boot")
+    print("  via killy-enroll-host-key.service.")
 
     step(12, "Unmounting...")
     run("umount -R /mnt")

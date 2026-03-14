@@ -31,6 +31,37 @@
 
   outputs = { self, nixpkgs, sops-nix }: let
     system = "x86_64-linux";
+
+    # Pre-evaluate the killy target system so the ISO can embed its full store
+    # closure via isoImage.storeContents, making nixos-install fully offline.
+    #
+    # We use the same nixpkgs + sops-nix inputs as the ISO and load the same
+    # NixOS modules as killy/flake.nix, but substitute hardware.nix for
+    # configuration.nix — the latter imports hardware-configuration.nix which
+    # is generated at install time and is not available here.
+    #
+    # killy/modules/hardware.nix explicitly declares all kernel modules, CPU
+    # microcode, and platform settings that nixos-generate-config would add,
+    # so both evaluations (here and on the target) produce the same initrd and
+    # kernel closures — Nix deduplicates them and nixos-install needs nothing
+    # from the network.
+    killySystem = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        sops-nix.nixosModules.sops
+        ./killy/modules/hardware.nix
+        ./killy/modules/base.nix
+        ./killy/modules/wireguard.nix
+        ./killy/modules/virt.nix
+        # Stub fileSystems to satisfy the NixOS assertion that a root filesystem
+        # is defined. The real entries come from hardware-configuration.nix at
+        # install time; they affect only systemd mount units (thin text files),
+        # not any package in the closure.
+        {
+          fileSystems."/" = { device = "/dev/sda"; fsType = "btrfs"; };
+        }
+      ];
+    };
   in {
     # Build-host dev shell — provides age, sops, ykman, python3, ruff, etc.
     # Enter with:  cd ~/code/killy && nix-shell
@@ -38,10 +69,13 @@
       import ./default.nix { pkgs = nixpkgs.legacyPackages.${system}; };
 
     # Full NixOS configuration for the killy installer ISO.
-    # This is an intermediate object; the actual ISO derivation is extracted
-    # below via .config.system.build.isoImage.
     nixosConfigurations.installer-killy = nixpkgs.lib.nixosSystem {
       inherit system;
+      # Pass the pre-built target system toplevel to iso.nix so it can be added
+      # to isoImage.storeContents.
+      specialArgs = {
+        killyToplevel = killySystem.config.system.build.toplevel;
+      };
       modules = [ ./killy/iso.nix ];
     };
 

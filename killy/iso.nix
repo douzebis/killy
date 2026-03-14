@@ -1,4 +1,4 @@
-{ ... }:
+{ killyToplevel, ... }:
 
 # killy host — installer ISO configuration.
 #
@@ -50,6 +50,7 @@
     "nixos/flake.nix".source             = ./flake.nix;
     "nixos/flake.lock".source            = ./flake.lock;
     "nixos/configuration.nix".source     = ./configuration.nix;
+    "nixos/modules/hardware.nix".source  = ./modules/hardware.nix;
     "nixos/modules/base.nix".source      = ./modules/base.nix;
     "nixos/modules/wireguard.nix".source = ./modules/wireguard.nix;
     "nixos/modules/virt.nix".source      = ./modules/virt.nix;
@@ -61,6 +62,18 @@
       mode   = "0755";
     };
   };
+
+  # Embed the full store closure of the target system.
+  # This ensures nixos-install runs fully offline — all packages are already
+  # in the ISO's Nix store and nothing needs to be fetched from the network.
+  # The killyToplevel derivation is evaluated in flake.nix using the same
+  # nixpkgs + sops-nix inputs and the same modules as killy/flake.nix.
+  isoImage.storeContents = [ killyToplevel ];
+
+  # Write the pre-built system path to a well-known location on the ISO.
+  # killy-install reads this to avoid re-evaluating the flake at install time
+  # (which would require internet access to fetch flake inputs).
+  environment.etc."nixos/killy-system-path".text = "${killyToplevel}\n";
 
   # Output ISO file name and volume label (visible in boot menus and when
   # the drive is mounted on another machine).
