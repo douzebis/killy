@@ -86,6 +86,9 @@ let
       ruff
 
       usbutils
+
+      # gh — GitHub CLI for managing repos, PRs, and GitHub Pages configuration.
+      gitAndTools.gh
     ];
   };
 
