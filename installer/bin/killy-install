@@ -320,29 +320,15 @@ def main():
     step(9, "Copying repo to /mnt/etc/nixos...")
     copy_repo()
 
-    step(10, "Copying ISO store to target store...")
-    # Use `nix copy` to transfer all store paths from the live ISO into
-    # /mnt/nix/store and register them in /mnt's Nix DB in one step.
-    # This correctly handles both output paths and their closure metadata,
-    # ensuring nixos-install finds everything locally (no network access).
-    # nix-command + flakes are enabled in nix.settings on the ISO.
-    all_paths = run_capture("nix path-info --all")
-    path_list = all_paths.splitlines()
-    print(f"  copying {len(path_list)} store paths to /mnt via nix copy")
-    # nix copy accepts paths as arguments; batch to avoid ARG_MAX.
-    batch = 50
-    for i in range(0, len(path_list), batch):
-        chunk = " ".join(path_list[i:i+batch])
-        run(f"nix copy --no-check-sigs --to 'local?root=/mnt' {chunk}")
-
-    step(11, "Running nixos-install...")
-    # Re-evaluate the flake to get a toplevel with the real hardware-configuration.nix
-    # (correct UUIDs/fstab). All dependencies are already registered in /mnt's store;
-    # nixos-install only needs to build the thin toplevel (symlinks + fstab text).
+    step(10, "Running nixos-install...")
+    # nixos-install re-evaluates the flake against the real hardware-configuration.nix
+    # (correct UUIDs/fstab) and builds only the thin toplevel (activation scripts,
+    # fstab — seconds of work). All package dependencies are served locally by
+    # nixos-install's auto?trusted=1 substituter, which queries the live ISO's Nix
+    # store — no network access occurs.
     run("nixos-install --root /mnt --no-root-passwd --flake /mnt/etc/nixos#killy"
         " --impure"
-        " --no-channel-copy"
-        " --option substituters ''")
+        " --no-channel-copy")
 
     print()
     print("=" * 50)
@@ -351,7 +337,7 @@ def main():
     print("  Host age key enrollment happens on first boot")
     print("  via killy-enroll-host-key.service.")
 
-    step(12, "Unmounting...")
+    step(11, "Unmounting...")
     run("umount -R /mnt")
 
     print("\nRebooting in 5 seconds...")

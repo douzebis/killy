@@ -391,15 +391,6 @@ in {
     };
 
     # -------------------------------------------------------------------------
-    # Nix settings
-    #
-    # Enable nix-command and flakes so killy-install can use `nix copy` to
-    # transfer the pre-built closure to /mnt (nix copy --to local?root=/mnt).
-    # -------------------------------------------------------------------------
-
-    nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-    # -------------------------------------------------------------------------
     # Packages available on the live system
     # -------------------------------------------------------------------------
 
